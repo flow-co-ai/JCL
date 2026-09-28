@@ -277,6 +277,19 @@ function costFor(src, set) {
   const v = sum(Object.entries(c).filter(([m]) => inR(m, set)), ([, v]) => v); return v || null;
 }
 
+
+function scDefStats(set, pset) {
+  const rows = D.sc_def_month || [];
+  const agg = (ms) => { const g = {}; for (const r of rows) if (inR(r.m, ms)) { const x = (g[r.name] ||= { clicks: 0, impressions: 0, posw: 0 }); x.clicks += r.clicks; x.impressions += r.impressions; x.posw += r.posw; } return g; };
+  const avail = D.sc_months_available || [];
+  const fair = pset && range !== 'month' && pset.every((m) => avail.includes(m));  // only compare full, covered periods
+  const cur = agg(set), pri = fair ? agg(pset) : {};
+  const top = Object.fromEntries((D.sc_defendants || []).map((d) => [d.name, d.top[0]?.query || '']));
+  return Object.entries(cur).map(([name, c]) => ({ name, impressions: c.impressions, clicks: c.clicks, position: c.impressions ? c.posw / c.impressions : null, prior: fair ? pri[name]?.impressions || 0 : null, top: top[name] || '' }))
+    .sort((a, b) => b.impressions - a.impressions);
+}
+const scWhen = () => { const a = D.sc_months_available || []; return range === 'all' && a.length ? `since ${mLabel(a[0], true)} (Google keeps 16 months)` : PHRASE[range][0]; };
+
 /* ---------- views ---------- */
 const VIEWS = { overview: 'Overview', defendants: 'Defendants', sources: 'Case sources', marketing: 'Marketing', intake: 'Intake & pipeline' };
 let view = 'overview';
@@ -388,7 +401,7 @@ function renderMarketing() {
   const allMetaFees = fees(D.paid.filter((r) => r.src === 'Meta')), allSpend = sum(D.meta_month, 'spend');
   const ga = group(D.ga4_month, (r) => r.channel); const chans = Object.keys(ga).sort((a, b) => sum(ga[b], 'sessions') - sum(ga[a], 'sessions')).slice(0, 5);
   const gm = monthsBack(15); const gStacks = chans.map((c, i) => ({ label: c, color: COLORS[i], values: gm.map((m) => sum(ga[c].filter((r) => r.m === m), 'sessions')) }));
-  const sd = D.sc_defendants;
+  const sd = scDefStats(set, RANGES[range].prior?.());
   return head('Marketing') + `
   <div class="grid kpis">
     <div class="kpi"><div class="l">Meta spend</div><div class="v num">${$k(spend)}</div><div class="d">${esc(rangeNote())}</div></div>
@@ -397,10 +410,10 @@ function renderMarketing() {
     <div class="kpi"><div class="l">Fees from Meta cases</div><div class="v num">${$k(fees(paidMeta))}</div><div class="d">all time ${$k(allMetaFees)} on ${$k(allSpend)} spent</div></div>
   </div>
   <div class="panel"><h3>Meta spend by month</h3><p class="hint">Both ad accounts combined. Last spend recorded ${esc(D.meta_last_spend || '–')}.</p>${bars({ months, stacks })}${legend(stacks.map((s) => [s.color, s.label]))}</div>
-  <div class="panel"><h3>People searching the companies you sue</h3><p class="hint">Google searches containing each company's name that showed the firm's site, last 90 days vs the 90 before. Average position is the firm's rank in website results, not the map.</p>
-    ${sd.length ? `<div class="tw"><table><thead><tr><th>Company</th><th>Times shown</th><th>Change</th><th>Clicks</th><th>Avg position</th><th style="text-align:left">Top search</th></tr></thead><tbody>
-    ${sd.map((s) => `<tr><td>${esc(s.name)}</td><td class="num">${int(s.last.impressions)}</td><td class="num">${chg(s.last.impressions, s.prior.impressions)}</td><td class="num">${int(s.last.clicks)}</td><td class="num">${s.last.position ? s.last.position.toFixed(1) : '–'}</td><td style="text-align:left;white-space:normal">${esc(s.top[0]?.query || '')}</td></tr>`).join('')}
-    </tbody></table></div>` : '<p class="empty">No company-name searches yet.</p>'}
+  <div class="panel"><h3>People searching the companies you sue</h3><p class="hint">Times the firm's site showed in Google for searches naming each company, ${esc(scWhen())}, with change against the period before where Google has the full comparison period. Average position is the firm's rank in website results, not the map. Google reports with a 2–3 day delay.</p>
+    ${sd.length ? `<div class="tw"><table><thead><tr><th>Company</th><th>Times shown</th><th>Change</th><th>Clicks</th><th>Avg position</th><th style="text-align:left">Top search, last 90 days</th></tr></thead><tbody>
+    ${sd.map((x) => `<tr><td>${esc(x.name)}</td><td class="num">${int(x.impressions)}</td><td class="num">${x.prior == null ? '–' : chg(x.impressions, x.prior) || '<span class="tag">new</span>'}</td><td class="num">${int(x.clicks)}</td><td class="num">${x.position ? x.position.toFixed(1) : '–'}</td><td style="text-align:left;white-space:normal">${esc(x.top)}</td></tr>`).join('')}
+    </tbody></table></div>` : '<p class="empty">No company-name searches in this period.</p>'}
   </div>
   <div class="grid two">
     <div class="panel"><h3>Top searches</h3><p class="hint">Last 90 days, by clicks.</p><div class="tw"><table><thead><tr><th>Search</th><th>Clicks</th><th>Position</th><th>vs prior 90 days</th></tr></thead><tbody>
@@ -506,8 +519,8 @@ function hero() {
     const mm = D.meta_month.filter((x) => inR(x.m, set)), spend = sum(mm, 'spend');
     const signed = sum(signedIn(set, (x) => x.src === 'Meta'), 'n'), mf = fees(paidIn(set, (x) => x.src === 'Meta'));
     h = spend ? `${G($k(spend))} on Meta ${when} signed ${int(signed)} case${signed === 1 ? '' : 's'}${signed ? `, ${$k(spend / signed)} per signed case` : ''}.` : `No Meta spend recorded ${when}.`;
-    const sd = D.sc_defendants.reduce((a, x) => a + x.last.impressions, 0), sdp = D.sc_defendants.reduce((a, x) => a + x.prior.impressions, 0);
-    st = [[int(sum(mm, 'leads')), `Meta leads ${when}`], [$k(mf), `fees collected from Meta cases ${when}`], [int(sd), `Google searches naming defendants showed the site, last 90 days${sdp ? ` (${sd >= sdp ? '+' : ''}${Math.round(((sd - sdp) / sdp) * 100)}%)` : ''}`]];
+    const sdr = scDefStats(set, pset), sd = sum(sdr, 'impressions'), sdp = sdr.some((x) => x.prior != null) ? sum(sdr, (x) => x.prior || 0) : 0;
+    st = [[int(sum(mm, 'leads')), `Meta leads ${when}`], [$k(mf), `fees collected from Meta cases ${when}`], [int(sd), `times Google showed the site for searches naming a defendant, ${esc(scWhen())}${sdp ? ` (${sd >= sdp ? '+' : ''}${Math.round(((sd - sdp) / sdp) * 100)}%)` : ''}`]];
   } else if (view === 'intake') {
     const ld = D.leads.filter((x) => inR(x.m, set)), pl = pset ? D.leads.filter((x) => inR(x.m, pset)) : [];
     const n = sum(ld, 'n'), c = sum(ld, 'cases'), np = sum(pl, 'n');
