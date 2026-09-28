@@ -468,8 +468,60 @@ function srcDrawer(src) {
     <p class="hint" style="margin-top:14px">Case list: Zoho › Cases, filter Lead Source.</p>`);
 }
 
+
+/* ---------- hero: follows the tab and the date range ---------- */
+const PHRASE = { month: ['this month so far', 'last month'], last: ['last month', 'the month before'], q: ['over the last 3 months', 'the 3 months before'], y: ['over the last 12 months', 'the year before'], all: ['across all history', null] };
+function paceOf(v) { const [y, mo] = curM.split('-').map(Number), done = weekdays(y, mo, now.getUTCDate()), all = weekdays(y, mo); return done ? v / done * all : v; }
+function vs(a, b, prior, fmt = $k) {
+  if (!prior || !b) return '';
+  if (range === 'month') return `, on pace for ${fmt(paceOf(a))} against ${fmt(b)} last month`;
+  const c = Math.round(((a - b) / b) * 100);
+  return Math.abs(c) < 1 ? `, flat on ${prior}` : `, ${c >= 0 ? 'up' : 'down'} ${Math.abs(c)}% on ${prior}`;
+}
+function hero() {
+  const r = RANGES[range], set = r.months?.(), pset = r.prior?.(), [when, prior] = PHRASE[range];
+  // For "this month", compare to the same number of days last month is not possible with monthly data; compare to full last month instead.
+  const priorLabel = prior;
+  const G = (v) => `<b>${v}</b>`;
+  let h = '', st = [];
+  if (view === 'overview') {
+    const cur = paidIn(set), pri = pset ? paidIn(pset) : [];
+    const f = fees(cur), fp = fees(pri), n = sum(cur, 'n'), np = sum(pri, 'n');
+    h = `${G($k(f))} in fees collected ${when}${vs(f, fp, priorLabel)}.`;
+    const top = defendantStats(set).filter((d) => d.paid).sort((a, b) => b.fees - a.fees)[0];
+    const nPaid = sum(D.paid, 'n'), nLost = sum(D.lost, 'n');
+    st = [[int(n), `cases paid${np ? `, versus ${int(np)} ${prior}` : ''}`], [$k(n ? f / n : 0), `average fee per case${np ? `, versus ${$k(fp / np)}` : ''}`]];
+    if (top) st.push([$k(top.fees), `from ${esc(top.def)}, the top defendant`]);
+  } else if (view === 'defendants') {
+    const ds = defendantStats(set).filter((d) => d.paid).sort((a, b) => b.fees - a.fees), tot = sum(ds, 'fees'), t = ds[0];
+    h = t ? `${G(esc(t.def))} paid ${$k(t.fees)} in fees ${when}, ${pct(t.fees / tot)} of the total.` : `No defendant payments ${when}.`;
+    const active = D.open.filter((o) => ACTIVE.includes(o.group) && o.stage !== 'Failed Demand');
+    st = [[int(ds.length), `defendants paid ${when}`], [t ? $k(t.avg) : '–', t ? `average fee on ${esc(t.def)}` : 'average fee'], [int(sum(active, 'n')), 'open cases against defendants being worked now']];
+  } else if (view === 'sources') {
+    const ss = sourceStats(set).sort((a, b) => b.fees - a.fees), t = ss[0], tot = sum(ss, 'fees'), signed = sum(ss, 'signed');
+    const topSigned = [...ss].sort((a, b) => b.signed - a.signed)[0];
+    h = t && t.fees ? `${G(esc(t.src))} cases brought in ${$k(t.fees)} ${when}, ${pct(t.fees / tot)} of all fees.` : `No fees collected ${when} yet.`;
+    st = [[int(signed), `cases signed ${when}`], [topSigned ? int(topSigned.signed) : '–', topSigned ? `signed from ${esc(topSigned.src)}, the biggest source` : ''], [t ? $k(t.avg) : '–', t ? `average fee on ${esc(t.src)} cases` : '']];
+  } else if (view === 'marketing') {
+    const mm = D.meta_month.filter((x) => inR(x.m, set)), spend = sum(mm, 'spend');
+    const signed = sum(signedIn(set, (x) => x.src === 'Meta'), 'n'), mf = fees(paidIn(set, (x) => x.src === 'Meta'));
+    h = spend ? `${G($k(spend))} on Meta ${when} signed ${int(signed)} case${signed === 1 ? '' : 's'}${signed ? `, ${$k(spend / signed)} per signed case` : ''}.` : `No Meta spend recorded ${when}.`;
+    const sd = D.sc_defendants.reduce((a, x) => a + x.last.impressions, 0), sdp = D.sc_defendants.reduce((a, x) => a + x.prior.impressions, 0);
+    st = [[int(sum(mm, 'leads')), `Meta leads ${when}`], [$k(mf), `fees collected from Meta cases ${when}`], [int(sd), `Google searches naming defendants showed the site, last 90 days${sdp ? ` (${sd >= sdp ? '+' : ''}${Math.round(((sd - sdp) / sdp) * 100)}%)` : ''}`]];
+  } else if (view === 'intake') {
+    const ld = D.leads.filter((x) => inR(x.m, set)), pl = pset ? D.leads.filter((x) => inR(x.m, pset)) : [];
+    const n = sum(ld, 'n'), c = sum(ld, 'cases'), np = sum(pl, 'n');
+    h = `${G(int(n))} leads came in ${when}${vs(n, np, priorLabel, int)}, and ${int(c)} became cases.`;
+    const won = D.open.filter((o) => o.group === 'Won, not collected'), lit = D.open.filter((o) => o.group === 'Litigation');
+    st = [[pct(n ? c / n : null), 'of those leads became cases'], [int(sum(lit, 'n')), 'cases in litigation now'], [$k(fees(won)), `won, not yet collected (${int(sum(won, 'n'))} cases)`]];
+  }
+  $('#headline').innerHTML = h;
+  $('#hstats').innerHTML = st.filter((x) => x[1]).map(([v, l]) => `<div><div class="v num">${v}</div><div class="l">${l}</div></div>`).join('');
+}
+
 /* ---------- shell ---------- */
 function render() {
+  hero();
   $('#tabs').innerHTML = Object.entries(VIEWS).map(([k, l]) => `<button role="tab" data-view="${k}" aria-selected="${k === view}">${l}</button>`).join('');
   $('#view').innerHTML = { overview: renderOverview, defendants: renderDefendants, sources: renderSources, marketing: renderMarketing, intake: renderIntake }[view]();
 }
@@ -477,20 +529,6 @@ function start() {
   $('#gate').hidden = true; $('#gate').style.display = 'none'; $('#app').hidden = false;
   const gen = new Date(D.generated_at);
   $('#fresh').textContent = 'Updated ' + gen.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-  const y = monthsBack(12, addM(curM, -1)), p = monthsBack(12, addM(curM, -13));
-  const f = fees(D.paid.filter((r) => y.includes(r.m))), fp = fees(D.paid.filter((r) => p.includes(r.m)));
-  const n = sum(D.paid.filter((r) => y.includes(r.m)), 'n'), np = sum(D.paid.filter((r) => p.includes(r.m)), 'n');
-  const c = fp ? Math.round(((f - fp) / fp) * 100) : null;
-  $('#headline').innerHTML = `<b>${$k(f)}</b> in fees collected over the last 12 months${c != null ? `, ${c >= 0 ? 'up' : 'down'} ${Math.abs(c)}% on the year before` : ''}.`;
-  const won = D.open.filter((o) => o.group === 'Won, not collected');
-  const ds = defendantStats(y).filter((d) => d.paid >= 5).sort((a, b) => b.fees - a.fees);
-  const nPaid = sum(D.paid, 'n'), nLost = sum(D.lost, 'n');
-  const dn = sum(D.paid, 'days_n'), months = dn ? sum(D.paid, 'days_sum') / dn / 30.4 : null;
-  const stats = [];
-  if (ds[0]) stats.push([$k(ds[0].avg), `average fee on ${esc(ds[0].def)}, the top defendant`]);
-  if (nPaid + nLost) stats.push([pct(nPaid / (nPaid + nLost)), 'of resolved cases won and paid']);
-  if (months) stats.push([months.toFixed(1), 'months from signing to payment, on average']);
-  $('#hstats').innerHTML = stats.map(([v, l]) => `<div><div class="v num">${v}</div><div class="l">${l}</div></div>`).join('');
   $('#hlogo').src = $('#gate img').src;
   const q = D.quality;
   $('#foot').innerHTML = `Data from Zoho CRM (cases and leads), Meta ad accounts, Google Search Console and Google Analytics. Refreshed automatically.
