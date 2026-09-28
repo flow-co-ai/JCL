@@ -1,0 +1,32 @@
+name: Refresh dashboard
+on:
+  schedule:
+    - cron: "15 */6 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["public/**", "scripts/**", "config.json", ".github/workflows/refresh.yml"]
+concurrency:
+  group: refresh
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build and encrypt
+        run: node scripts/build.mjs
+        env:
+          ZOHO_CLIENT_ID: ${{ secrets.ZOHO_CLIENT_ID }}
+          ZOHO_CLIENT_SECRET: ${{ secrets.ZOHO_CLIENT_SECRET }}
+          ZOHO_REFRESH_TOKEN: ${{ secrets.ZOHO_REFRESH_TOKEN }}
+          WINDSOR_API_KEY: ${{ secrets.WINDSOR_API_KEY }}
+          DASHBOARD_KEY: ${{ secrets.DASHBOARD_KEY }}
+      - name: Deploy to Netlify
+        run: npx --yes netlify-cli@17 deploy --prod --dir=public --site "$NETLIFY_SITE_ID" --auth "$NETLIFY_AUTH_TOKEN" --message "refresh $(date -u +%F-%H%M)"
+        env:
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
