@@ -90,6 +90,16 @@ export async function windsorPull(cfg) {
     ['date', 'session_default_channel_group', 'sessions', 'conversions'], scFrom, today));
   out.sc_daily = await safe('Search Console daily', () => windsor('searchconsole', W.search_console,
     ['date', 'clicks', 'impressions'], scFrom, today));
+  // Query-level Search Console by calendar month, so every date range on the page can use it.
+  out.sc_q_months = [];
+  const first = new Date(); first.setUTCDate(1); first.setUTCMonth(first.getUTCMonth() - 15);
+  for (let d = new Date(first); d <= new Date(); d.setUTCMonth(d.getUTCMonth() + 1)) {
+    const from = iso(d), end = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+    const to = iso(end > new Date() ? new Date() : end);
+    const rows = await safe(`Search Console ${from.slice(0, 7)}`, () => windsor('searchconsole', W.search_console,
+      ['query', 'clicks', 'impressions', 'position'], from, to));
+    out.sc_q_months.push({ m: from.slice(0, 7), rows });
+  }
   out.sc_q_last = await safe('Search Console queries', () => windsor('searchconsole', W.search_console,
     ['query', 'clicks', 'impressions', 'position'], daysAgo(92), daysAgo(3)));
   out.sc_q_prior = await safe('Search Console prior queries', () => windsor('searchconsole', W.search_console,

@@ -143,6 +143,15 @@ export function transform(raw, cfg) {
       .map((r) => ({ query: r.query, clicks: n(r.clicks), impressions: n(r.impressions), position: n(r.position) }));
     scDef.push({ name, last: sum(last), prior: sum(prior), top });
   }
+  // Defendant-name searches by month.
+  const scDefMonth = [];
+  for (const { m, rows } of raw.windsor.sc_q_months || []) {
+    for (const [name, list] of Object.entries(terms)) {
+      const hit = match(rows, list); if (!hit.length) continue;
+      const t = sum(hit);
+      scDefMonth.push({ m, name, clicks: t.clicks, impressions: t.impressions, posw: (t.position || 0) * t.impressions });
+    }
+  }
   const topQ = (rows) => [...rows].sort((a, b) => n(b.clicks) - n(a.clicks) || n(b.impressions) - n(a.impressions)).slice(0, 60)
     .map((r) => ({ query: r.query, clicks: n(r.clicks), impressions: n(r.impressions), position: n(r.position) }));
   const priorPos = Object.fromEntries((raw.windsor.sc_q_prior || []).map((r) => [r.query, n(r.position)]));
@@ -158,6 +167,8 @@ export function transform(raw, cfg) {
     meta_last_spend: metaDates.at(-1) || null,
     source_costs: cfg.source_costs || {},
     ga4_month: vals(ga4), sc_month: vals(scM).sort((a, b) => a.m.localeCompare(b.m)),
+    sc_def_month: scDefMonth,
+    sc_months_available: (raw.windsor.sc_q_months || []).map((x) => x.m),
     sc_defendants: scDef.sort((a, b) => b.last.impressions - a.last.impressions),
     sc_queries: topQ(raw.windsor.sc_q_last || []).map((q) => ({ ...q, prior: priorPos[q.query] ?? null })),
     sc_pages: [...(raw.windsor.sc_pages || [])].sort((a, b) => n(b.clicks) - n(a.clicks)).slice(0, 25)
