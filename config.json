@@ -1,0 +1,44 @@
+{
+  "firm_name": "Justice Consumer Law",
+  "zoho_accounts_url": "https://accounts.zoho.com",
+  "fee_share": 1.0,
+  "fee_label": "Attorney fees (JCL + Guards Law combined)",
+  "history_start": "2024-06-01",
+  "windsor": {
+    "meta_accounts": [
+      { "id": "2058861724993154", "label": "Current account" },
+      { "id": "1471930250676645", "label": "Previous account" }
+    ],
+    "ga4_property": "533359334",
+    "search_console": "https://justiceconsumerlaw.com/"
+  },
+  "source_groups": {
+    "Meta": ["Meta", "Meta Ads", "Facebook", "Social Media"],
+    "Search & website": ["SEO", "Organic", "Website – Enquiry", "GuardsLaw - Home Page", "Web Download", "Web Research", "Web Cases", "Web Mail", "Chat"],
+    "Credit Saint": ["Credit Saint", "Creditsaint"],
+    "Bolster": ["Bolster CRM", "Bolster D5"],
+    "Attorney Review": ["AttorneyReview", "AR - CROA", "AR - Employment Law", "AR - FDCPA", "AR - TCPA"],
+    "Guards Law CROA claims": ["GuardsLaw CROA-CLAIMS", "GuardsLaw Stop Collections", "Stop Collections - Free Case Review"],
+    "TCA": ["TCA"],
+    "Referral": ["Referral", "External Referral", "Employee Referral", "Partner", "Seminar Partner", "Internal Seminar"]
+  },
+  "source_costs": {},
+  "source_costs_help": "Monthly cost for paid sources other than Meta, e.g. { \"Credit Saint\": { \"2026-08\": 5000 } }. Leave empty if unknown.",
+  "defendant_aliases": {},
+  "defendant_search_terms": {
+    "Freedom Debt Relief": ["freedom debt", "freedom financial"],
+    "Beyond Finance, LLC": ["beyond finance"],
+    "JG Wentworth's Debt Relief Program": ["jg wentworth", "j g wentworth", "jgwentworth"],
+    "Alleviate Financial Solutions": ["alleviate"],
+    "Clarity Debt Resolutions, Inc.": ["clarity debt"],
+    "Americor Funding, LLC": ["americor"],
+    "ClearOne Advantage": ["clearone", "clear one advantage"],
+    "Turnbull Law Group": ["turnbull"],
+    "Five Lakes Law Group": ["five lakes"],
+    "Pacific Debt Relief": ["pacific debt"],
+    "Citizens Debt Relief": ["citizens debt"],
+    "Cordoba Legal Group": ["cordoba"],
+    "National Debt Relief": ["national debt relief"],
+    "Accredited Debt Relief": ["accredited debt"]
+  }
+}
