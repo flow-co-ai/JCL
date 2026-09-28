@@ -1,5 +1,12 @@
 name: Zoho check
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: Which check to run
+        type: choice
+        options: [money, fields]
+        default: money
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -9,7 +16,8 @@ jobs:
         with:
           node-version: 20
       - name: Check Zoho (read-only)
-        run: node scripts/zoho-check.mjs
+        run: |
+          if [ "${{ inputs.script }}" = "money" ]; then node scripts/zoho-money.mjs; else node scripts/zoho-check.mjs; fi
         env:
           ZOHO_CLIENT_ID: ${{ secrets.ZOHO_CLIENT_ID }}
           ZOHO_CLIENT_SECRET: ${{ secrets.ZOHO_CLIENT_SECRET }}
