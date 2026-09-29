@@ -20,7 +20,7 @@ for (let i = 0; i < 1650; i++) {
   const created = imported ? addDays(new Date('2024-08-01'), Math.floor(rnd() * 90)) : addDays(new Date('2024-11-01'), Math.floor(rnd() * 690));
   const signed = imported ? (rnd() < 0.5 ? addDays(created, -Math.floor(rnd() * 200)) : null) : addDays(created, Math.floor(rnd() * 10));
   const stage = pick([['Settled Paid', 538], ['Case Dismissed', 231], ['Demand Sent', 180], ['On Ice', 159], ['Case Packaged - Needs Review', 143], ['Filed', 141], ['Failed Demand', 80], ['Settled Unpaid', 48], ['Drafted Demand', 45], ['Active Negotiations', 40], ['Settlement Agreement', 20], ['Retainer Not Signed', 13]]);
-  const d = { id: String(id++), Stage: stage, Account_Name: name, Lead_Source: pick(sources), Case_Type: type,
+  const d = { id: String(id++), Deal_Name: `Client${i} Sample v. ${name}`, Stage: stage, Account_Name: name, Lead_Source: pick(sources), Case_Type: type,
     Created_Time: created.toISOString(), Retainer_Signed_Date: signed ? iso(signed) : null, Lead_Intake_Date: null, Stage_Modified_Time: addDays(created, 60 + Math.floor(rnd() * 200)).toISOString() };
   if (['Settled Paid', 'Settled Unpaid', 'Settlement Agreement'].includes(stage)) {
     const f = Math.round(fee * (0.6 + rnd() * 0.8) / 50) * 50, p = Math.round(f * (0.1 + rnd() * 0.3) / 50) * 50;
@@ -54,6 +54,26 @@ const q = (s, c, i, p) => ({ query: s, clicks: c, impressions: i, position: p })
 const sc_q_last = [q('is freedom debt relief legit', 140, 3500, 6.2), q('freedom debt relief lawsuit', 90, 1900, 4.1), q('beyond finance lawsuit', 40, 1200, 8.3), q('jg wentworth debt relief reviews', 12, 900, 14.2), q('alleviate financial solutions complaints', 8, 600, 11.5), q('justice consumer law', 60, 120, 1.2), q('debt relief scam lawyer', 22, 1400, 12.8), q('croa lawsuit', 15, 800, 9.4), q('clarity debt resolution lawsuit', 6, 300, 7.7)];
 const sc_q_prior = sc_q_last.map((r) => ({ ...r, clicks: Math.round(r.clicks * 0.7), impressions: Math.round(r.impressions * 0.8), position: r.position + 2 }));
 const sc_pages = [{ page: 'https://justiceconsumerlaw.com/freedom-debt-relief-lawsuit/', clicks: 220, impressions: 5200, position: 5.1 }, { page: 'https://justiceconsumerlaw.com/', clicks: 90, impressions: 800, position: 3.2 }, { page: 'https://justiceconsumerlaw.com/beyond-finance-lawsuit/', clicks: 40, impressions: 1200, position: 8.3 }];
+const sc_q_months = [];
+for (let i = 15; i >= 0; i--) { const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - i); const f = 0.5 + (15 - i) / 20;
+  sc_q_months.push({ m: iso(d).slice(0, 7), rows: sc_q_last.map((r) => ({ ...r, clicks: Math.round(r.clicks / 3 * f * (0.8 + rnd() * 0.4)), impressions: Math.round(r.impressions / 3 * f * (0.8 + rnd() * 0.4)) })) }); }
+// Tracker rows: 2026 packaged cases pointing at some of the Zoho cases above.
+const srcs2 = [['Meta', 20], ['AR CROA', 35], ['SEO', 12], ['Attorney Review', 15], ['GL-CROA', 8], ['Credit Saint', 10]];
+const sheetRows = []; const nowM = new Date().getUTCMonth();
+for (let mi = 0; mi <= nowM; mi++) {
+  const count = 25 + Math.floor(rnd() * 20);
+  for (let k = 0; k < count; k++) {
+    const d = deals[Math.floor(rnd() * deals.length)];
+    const age = nowM - mi;
+    d.Stage = pick(age > 5 ? [['Settled Paid', 30], ['Settled Unpaid', 10], ['Filed', 30], ['Case Dismissed', 10], ['Demand Sent', 20]] : age > 2 ? [['Settled Paid', 8], ['Settled Unpaid', 10], ['Filed', 45], ['Demand Sent', 25], ['Case Dismissed', 5]] : [['Filed', 30], ['Demand Sent', 30], ['Drafted Demand', 25], ['Case Packaged - Needs Review', 15]]);
+    if (['Settled Paid', 'Settled Unpaid'].includes(d.Stage) && !d.Gaurds_Law_Attorney_s_Fees) { d.Gaurds_Law_Attorney_s_Fees = 4000 + Math.round(rnd() * 5000); d.Settlement_Amount = d.Gaurds_Law_Attorney_s_Fees + 800; d.Client_Payout = 800; }
+    if (d.Stage === 'Settled Paid') d.Summons_Executed = iso(addDays(new Date(Date.UTC(2026, mi, 10)), 60 + Math.floor(rnd() * 90)));
+    const unmatched = rnd() < 0.05;
+    sheetRows.push({ name: unmatched ? `Nomatch Person${k} v. Somebody` : d.Deal_Name.replace('Sample', 'Q. Sample'), member: rnd() < 0.55 ? 'A' : 'K',
+      date: iso(new Date(Date.UTC(2026, mi, 1 + Math.floor(rnd() * 27)))), m: `2026-${String(mi + 1).padStart(2, '0')}`, source: pick(srcs2),
+      drafted: rnd() < 0.8 ? '9/2' : '', filing: rnd() < 0.55 ? 'Filed' : '', red: rnd() < 0.09, isFiled: rnd() < 0.55, isDrafted: rnd() < 0.8 });
+  }
+}
 fs.mkdirSync('sample', { recursive: true });
-fs.writeFileSync('sample/fixture.json', JSON.stringify({ deals, leads, windsor: { meta, ga4, sc_daily: sc, sc_q_last, sc_q_prior, sc_pages, errors: [] } }));
+fs.writeFileSync('sample/fixture.json', JSON.stringify({ deals, leads, sheet: { rows: sheetRows, tabs: ['January \'26'] }, windsor: { meta, ga4, sc_daily: sc, sc_q_last, sc_q_prior, sc_q_months, sc_pages, errors: [] } }));
 console.log('Wrote sample/fixture.json');

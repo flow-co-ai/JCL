@@ -36,7 +36,7 @@ export async function zohoPull(cfg) {
     return out;
   }
 
-  const deals = await all('Deals', ['Stage', 'Account_Name', 'Lead_Source', 'Case_Type', 'Created_Time',
+  const deals = await all('Deals', ['Deal_Name', 'Stage', 'Account_Name', 'Lead_Source', 'Case_Type', 'Created_Time',
     'Retainer_Signed_Date', 'Lead_Intake_Date', 'Summons_Executed', 'Settled_in_Principle', 'Stage_Modified_Time',
     'Settlement_Amount', 'Settlement_Amount_EXP', 'Settlement_Amount_EQF', 'Settlement_Amount_TU',
     'Gaurds_Law_Attorney_s_Fees', 'Client_Payout', 'Court_fee', 'Debt_Wavier', 'Debt_Waiver_2', 'Debt_Waiver_3']);

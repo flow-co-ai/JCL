@@ -1,4 +1,5 @@
-// Turns raw Zoho + Windsor rows into aggregated, name-free totals for the page.
+// Turns raw Zoho + Windsor + tracker-sheet rows into aggregated, name-free totals for the page.
+import { buildMatcher, norm } from './match.mjs';
 const n = (v) => (typeof v === 'number' ? v : v == null || v === '' ? 0 : Number(v) || 0);
 const month = (s) => (s ? String(s).slice(0, 7) : null);
 const day = (s) => (s ? new Date(String(s).slice(0, 10) + 'T12:00:00Z') : null);
@@ -83,6 +84,40 @@ export function transform(raw, cfg) {
     }
   }
 
+
+  // ---------- 2026 packaged cases (tracker sheet = source of truth), priced from Zoho ----------
+  const sheetMap = {};
+  for (const [g, list] of Object.entries(cfg.sheet_source_groups || {})) for (const s of list) sheetMap[norm(s)] = g;
+  const sheetSrc = (s) => sheetMap[norm(s)] || (s && s !== 'Not recorded' ? s : 'Not recorded');
+  const team = cfg.team || {};
+  const matchCase = buildMatcher(raw.deals);
+  const cohort = new Map(), unmatched = [];
+  const sq = { rows: 0, matched: 0, red: 0, tabs: raw.sheet?.tabs || [] };
+  for (const r of raw.sheet?.rows || []) {
+    sq.rows++; if (r.red) sq.red++;
+    const d = matchCase(r.name); if (d) sq.matched++; else unmatched.push(r.name);
+    const rawDef = d?.Account_Name || (r.name.split(/\s+v\.?\s+/i)[1] || '').trim();
+    const def = d ? display[defendantKey(d.Account_Name, aliases)] : (rawDef || '(not set)');
+    const type = d?.Case_Type && d.Case_Type !== '-None-' ? d.Case_Type : 'Not set';
+    const stage = d?.Stage || null;
+    const grp = r.red ? 'Charged back' : !d ? 'Not found in Zoho' : STAGE_GROUP[stage] || 'Other';
+    const settle = d ? n(d.Settlement_Amount) + n(d.Settlement_Amount_EXP) + n(d.Settlement_Amount_EQF) + n(d.Settlement_Amount_TU) : 0;
+    const fee = d ? n(d.Gaurds_Law_Attorney_s_Fees) * share : 0, payout = d ? n(d.Client_Payout) : 0;
+    const paidDate = stage === 'Settled Paid' ? (d.Summons_Executed || d.Stage_Modified_Time) : null;
+    const days = paidDate && r.date ? daysBetween(day(r.date), day(paidDate)) : null;
+    const since = d && grp === 'Won, not collected' ? (d.Settled_in_Principle || d.Stage_Modified_Time) : null;
+    const k = [r.m, sheetSrc(r.source), team[r.member] || r.member, def, type, grp, stage, r.isFiled, r.isDrafted, month(paidDate)].join('|');
+    const x = acc(cohort, k, () => ({ m: r.m, src: sheetSrc(r.source), member: team[r.member] || r.member, def, type, group: grp, stage,
+      filed: !!r.isFiled, drafted: !!r.isDrafted, pm: month(paidDate), n: 0, settle: 0, fees: 0, payout: 0, days_sum: 0, days_n: 0, age_sum: 0 }));
+    x.n++; x.settle += settle; x.fees += fee; x.payout += payout;
+    if (days != null && days >= 0) { x.days_sum += days; x.days_n++; }
+    if (since) x.age_sum += Math.max(0, daysBetween(day(since), new Date()) || 0);
+  }
+  // History per defendant (all Zoho cases) for expected value: paid, dismissed, fees.
+  const hist = {};
+  for (const r of paid.values()) { const h = (hist[r.def] ||= { paid: 0, lost: 0, fees: 0 }); h.paid += r.n; h.fees += r.fees; }
+  for (const r of lost.values()) { const h = (hist[r.def] ||= { paid: 0, lost: 0, fees: 0 }); h.lost += r.n; }
+
   // Dominant case type per defendant.
   const defType = Object.fromEntries(Object.entries(types).map(([k, v]) => [k, Object.entries(v).sort((a, b) => b[1] - a[1])[0][0]]));
 
@@ -161,6 +196,7 @@ export function transform(raw, cfg) {
     generated_at: new Date().toISOString(),
     firm: cfg.firm_name, fee_label: cfg.fee_label, fee_share: share,
     defendants: Object.fromEntries(Object.values(display).map((d) => [d, defType[d] || 'Not set'])),
+    year: cfg.sheet?.year || null, cohort: vals(cohort), hist, unmatched_count: unmatched.length,
     paid: vals(paid), signed: vals(signed), lost: vals(lost), open: vals(open),
     leads: vals(leads), lead_status_90: vals(status90),
     meta_month: vals(metaM), meta_campaigns_90: vals(camp).sort((a, b) => b.spend - a.spend),
@@ -173,6 +209,7 @@ export function transform(raw, cfg) {
     sc_queries: topQ(raw.windsor.sc_q_last || []).map((q) => ({ ...q, prior: priorPos[q.query] ?? null })),
     sc_pages: [...(raw.windsor.sc_pages || [])].sort((a, b) => n(b.clicks) - n(a.clicks)).slice(0, 25)
       .map((r) => ({ page: String(r.page).replace(/^https?:\/\/[^/]+/, '') || '/', clicks: n(r.clicks), impressions: n(r.impressions), position: n(r.position) })),
-    quality: { ...dq, windsor_errors: raw.windsor.errors || [] },
+    quality: { ...dq, sheet: sq, windsor_errors: raw.windsor.errors || [] },
+    _unmatched: unmatched,
   };
 }

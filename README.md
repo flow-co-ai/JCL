@@ -3,9 +3,13 @@
 Live at https://jcl-4oz4.netlify.app (password = DASHBOARD_KEY secret).
 
 ## How it works
-GitHub Action (every 6 hours, on push, or Run workflow) → `scripts/build.mjs` pulls Zoho CRM (cases, leads) and Windsor
+GitHub Action (every 2 hours, on push, or Run workflow) → `scripts/build.mjs` pulls Zoho CRM (cases, leads) and Windsor
 (Meta both accounts, GA4 533359334, Search Console) → aggregates to name-free totals → AES-256-GCM encrypts to
 `public/data.enc.json` → deploys `public/` to Netlify. No client data is stored in the repo.
+
+## Scope
+Cases = the 2026 monthly tabs of the JCL Tracker Google Sheet (packaged cases; red row = chargeback; column A = team member).
+Each is matched to its Zoho case by name for stage and dollars. Run the workflow with "show_unmatched" to list names that did not match.
 
 ## Where each number comes from (Zoho › Cases › Settlement Information)
 - Fees: Attorney's Fees field × `fee_share` in config.json (1.0 = JCL + Guards Law combined).

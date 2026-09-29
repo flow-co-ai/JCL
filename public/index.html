@@ -203,16 +203,16 @@ const curM = now.toISOString().slice(0, 7);
 function addM(m, k) { const [y, mo] = m.split('-').map(Number); const d = new Date(Date.UTC(y, mo - 1 + k, 1)); return d.toISOString().slice(0, 7); }
 function monthsBack(k, end = curM) { const out = []; for (let i = k - 1; i >= 0; i--) out.push(addM(end, -i)); return out; }
 function weekdays(y, mo, uptoDay) { let n = 0; const last = new Date(Date.UTC(y, mo, 0)).getUTCDate(); for (let d = 1; d <= Math.min(uptoDay ?? last, last); d++) { const w = new Date(Date.UTC(y, mo - 1, d)).getUTCDay(); if (w && w < 6) n++; } return n; }
+const inYr = (ms) => (ms.every((m) => m.startsWith(String(now.getUTCFullYear()))) ? ms : null);
 const RANGES = {
-  month: { label: 'This month', months: () => [curM], prior: () => [addM(curM, -1)] },
-  last: { label: 'Last month', months: () => [addM(curM, -1)], prior: () => [addM(curM, -2)] },
-  q: { label: '3 months', months: () => monthsBack(3, addM(curM, -1)), prior: () => monthsBack(3, addM(curM, -4)) },
-  y: { label: '12 months', months: () => monthsBack(12, addM(curM, -1)), prior: () => monthsBack(12, addM(curM, -13)) },
-  all: { label: 'All time', months: null, prior: null },
+  month: { label: 'This month', months: () => [curM], prior: () => inYr([addM(curM, -1)]) },
+  last: { label: 'Last month', months: () => [addM(curM, -1)], prior: () => inYr([addM(curM, -2)]) },
+  q: { label: '3 months', months: () => monthsBack(3, addM(curM, -1)), prior: () => inYr(monthsBack(3, addM(curM, -4))) },
+  ytd: { label: `${now.getUTCFullYear()} to date`, months: () => { const o = []; for (let m = `${now.getUTCFullYear()}-01`; m <= curM; m = addM(m, 1)) o.push(m); return o; }, prior: () => null },
 };
-let range = 'y';
-const inR = (m, set) => (set ? set.includes(m) : m && m !== 'import');
-const rangeNote = () => { const r = RANGES[range]; if (!r.months) return 'all recorded history'; const ms = r.months(); return ms.length === 1 ? mLabel(ms[0], true) + (ms[0] === curM ? ' so far' : '') : `${mLabel(ms[0], true)} – ${mLabel(ms.at(-1), true)}`; };
+let range = 'ytd';
+const inR = (m, set) => (set ? set.includes(m) : !!m);
+const rangeNote = () => { const ms = RANGES[range].months(); if (range === 'ytd') return `${now.getUTCFullYear()} to date`; return ms.length === 1 ? mLabel(ms[0], true) + (ms[0] === curM ? ' so far' : '') : `${mLabel(ms[0], true)} – ${mLabel(ms.at(-1), true)}`; };
 
 /* ---------- charts ---------- */
 function bars({ months, stacks, height = 220, fmt = $k, ghost = null, highlight = null, half = false }) {
@@ -236,214 +236,198 @@ function bars({ months, stacks, height = 220, fmt = $k, ghost = null, highlight 
 const legend = (items) => `<div class="legend">${items.map(([c, l]) => `<span><i style="background:${c}"></i>${esc(l)}</span>`).join('')}</div>`;
 const COLORS = ['var(--s1)', 'var(--s2)', 'var(--s3)', 'var(--s6)', 'var(--s5)', 'var(--s4)', 'var(--s8)', 'var(--s7)'];
 
-/* ---------- core aggregations ---------- */
+/* ---------- core: 2026 packaged cases ---------- */
+const YEAR = () => D.year || now.getUTCFullYear();
+const yearMonths = () => { const out = []; for (let m = `${YEAR()}-01`; m <= curM && m.startsWith(String(YEAR())); m = addM(m, 1)) out.push(m); return out; };
+const inYear = (m) => !!m && m.startsWith(String(YEAR())) && m <= curM;
 const fees = (rows) => sum(rows, 'fees');
-const paidIn = (set, f = () => true) => D.paid.filter((r) => inR(r.m, set) && f(r));
-const signedIn = (set, f = () => true) => D.signed.filter((r) => inR(r.m, set) && f(r));
+const C = (set, f = () => true) => D.cohort.filter((r) => inR(r.m, set) && f(r));
 const ACTIVE = ['Signing', 'Demand', 'Litigation'];
+const WON = ['Collected', 'Won, not collected'];
+const GROUP_ORDER = ['Collected', 'Won, not collected', 'Litigation', 'Demand', 'Signing', 'On hold', 'Dismissed', 'Charged back', 'Not found in Zoho'];
+const GROUP_COLOR = { 'Collected': 'var(--green-ink)', 'Won, not collected': 'var(--green)', 'Litigation': 'var(--navy)', 'Demand': 'var(--s4)', 'Signing': 'var(--s6)', 'On hold': 'var(--s7)', 'Dismissed': 'var(--s8)', 'Charged back': 'var(--bad)', 'Not found in Zoho': '#cfd3de', 'Other': '#cfd3de' };
 
-function defendantStats(set) {
-  const all = group(D.paid, (r) => r.def), inRange = group(paidIn(set), (r) => r.def);
-  const lost = group(D.lost, (r) => r.def), open = group(D.open, (r) => r.def);
-  const names = new Set([...Object.keys(inRange), ...Object.keys(open)]);
-  return [...names].map((def) => {
-    const pa = all[def] || [], pr = inRange[def] || [], lo = lost[def] || [], op = open[def] || [];
-    const nPaid = sum(pa, 'n'), nLost = sum(lo, 'n'), feesAll = fees(pa);
-    const avgAll = nPaid ? feesAll / nPaid : 0, win = nPaid + nLost >= 3 ? nPaid / (nPaid + nLost) : null;
-    const days = sum(pa, 'days_sum') / Math.max(1, sum(pa, 'days_n'));
-    const active = op.filter((o) => ACTIVE.includes(o.group) && o.stage !== 'Failed Demand'), won = op.filter((o) => o.group === 'Won, not collected');
-    return { def, type: D.defendants[def] || '', paid: sum(pr, 'n'), fees: fees(pr), settle: sum(pr, 'settle'), payout: sum(pr, 'payout'),
-      avg: sum(pr, 'n') ? fees(pr) / sum(pr, 'n') : 0, avgAll, win, months: sum(pa, 'days_n') ? days / 30.4 : null,
-      openN: sum(active, 'n'), wonN: sum(won, 'n'), wonFees: fees(won),
-      est: win != null ? sum(active, 'n') * win * avgAll : null };
-  });
+// History (all Zoho cases) for expected value.
+function histFor(def) {
+  const all = Object.values(D.hist || {}), gp = sum(all, 'paid'), gl = sum(all, 'lost'), gf = sum(all, 'fees');
+  const h = D.hist?.[def];
+  const win = h && h.paid + h.lost >= 3 ? h.paid / (h.paid + h.lost) : gp + gl ? gp / (gp + gl) : 0;
+  const avg = h && h.paid ? h.fees / h.paid : gp ? gf / gp : 0;
+  return { win, avg, paid: h?.paid || 0 };
 }
-function sourceStats(set) {
-  const srcs = new Set([...D.paid, ...D.signed, ...D.leads].map((r) => r.src));
-  const lost = group(D.lost, (r) => r.src), paidAll = group(D.paid, (r) => r.src);
-  return [...srcs].map((src) => {
-    const pr = paidIn(set, (r) => r.src === src), sg = signedIn(set, (r) => r.src === src);
-    const ld = D.leads.filter((r) => r.src === src && inR(r.m, set));
-    const nPaidAll = sum(paidAll[src] || [], 'n'), nLost = sum(lost[src] || [], 'n');
-    const cost = costFor(src, set);
-    return { src, signed: sum(sg, 'n'), paid: sum(pr, 'n'), fees: fees(pr), avg: sum(pr, 'n') ? fees(pr) / sum(pr, 'n') : 0,
-      win: nPaidAll + nLost >= 3 ? nPaidAll / (nPaidAll + nLost) : null, leads: sum(ld, 'n'), leadCases: sum(ld, 'cases'),
-      cost, cps: cost && sum(sg, 'n') ? cost / sum(sg, 'n') : null };
-  }).filter((s) => s.signed || s.paid || s.leads);
+function metrics(rows) {
+  const by = (g) => rows.filter((r) => (Array.isArray(g) ? g.includes(r.group) : r.group === g));
+  const n = sum(rows, 'n'), cb = sum(by('Charged back'), 'n');
+  const col = by('Collected'), wait = by('Won, not collected'), act = rows.filter((r) => ACTIVE.includes(r.group) && r.stage !== 'Failed Demand');
+  const est = sum(act, (r) => { const h = histFor(r.def); return r.n * h.win * h.avg; });
+  return { n, cb, cbRate: n ? cb / n : null, filed: sum(rows.filter((r) => r.filed), 'n'), drafted: sum(rows.filter((r) => r.drafted), 'n'),
+    won: sum(by(WON), 'n'), colN: sum(col, 'n'), col: fees(col), waitN: sum(wait, 'n'), wait: fees(wait), actN: sum(act, 'n'), est,
+    value: fees(col) + fees(wait) + est, lost: sum(by('Dismissed'), 'n'), unmatched: sum(by('Not found in Zoho'), 'n'),
+    days: sum(col, 'days_n') ? sum(col, 'days_sum') / sum(col, 'days_n') : null };
+}
+function statsBy(set, key) {
+  const g = group(C(set), (r) => r[key]);
+  return Object.entries(g).map(([k, rows]) => ({ key: k, ...metrics(rows) }));
 }
 function costFor(src, set) {
   if (src === 'Meta') return sum(D.meta_month.filter((r) => inR(r.m, set)), 'spend') || null;
   const c = D.source_costs?.[src]; if (!c) return null;
-  const v = sum(Object.entries(c).filter(([m]) => inR(m, set)), ([, v]) => v); return v || null;
+  return sum(Object.entries(c).filter(([m]) => inR(m, set)), ([, v]) => v) || null;
 }
 
+/* ---------- views ---------- */
+const VIEWS = { overview: 'Overview', defendants: 'Defendants', sources: 'Case sources', team: 'Team', marketing: 'Marketing', intake: 'Intake & pipeline' };
+let view = 'overview';
+function rangeCtl() { return `<div class="seg" role="group" aria-label="Date range">${Object.keys(RANGES).map((k) => `<button data-range="${k}" aria-pressed="${k === range}">${RANGES[k].label}</button>`).join('')}</div>`; }
+function head(title) { return `<div class="bar"><h2>${esc(title)}</h2>${rangeCtl()}</div>`; }
+const monthsChart = () => yearMonths();
+const pk = 'packaged';
+
+function statusChart(rows, months) {
+  const g = group(rows, (r) => r.m);
+  const groups = GROUP_ORDER.filter((x) => rows.some((r) => r.group === x));
+  const stacks = groups.map((x) => ({ label: x, color: GROUP_COLOR[x], values: months.map((m) => sum((g[m] || []).filter((r) => r.group === x), 'n')) }));
+  return bars({ months, stacks, fmt: int }) + legend(stacks.map((s) => [s.color, s.label]));
+}
+function funnel(m) {
+  const steps = [['Packaged', m.n], ['Complaint drafted', m.drafted], ['Filed', m.filed], ['Won', m.won], ['Collected', m.colN]];
+  const max = Math.max(1, m.n);
+  return `<table><tbody>${steps.map(([l, v]) => `<tr style="cursor:default"><td class="barcell">${l}<span class="b" style="width:${(v / max) * 100}%"></span></td><td class="num">${int(v)}</td><td class="num">${pct(m.n ? v / m.n : null)}</td></tr>`).join('')}
+    <tr style="cursor:default"><td>Charged back</td><td class="num down">${int(m.cb)}</td><td class="num">${pct(m.cbRate)}</td></tr></tbody></table>`;
+}
+
+function renderOverview() {
+  const set = RANGES[range].months(), rows = C(set), m = metrics(rows);
+  const top = statsBy(set, 'def').sort((a, b) => b.value - a.value);
+  const src = statsBy(set, 'src').sort((a, b) => b.n - a.n);
+  const brief = [];
+  if (m.n) brief.push(`${pct(m.n ? m.filed / m.n : 0)} of these cases are filed and ${pct(m.cbRate)} were charged back.`);
+  if (top[0]) brief.push(`${esc(top[0].key)} is the most valuable defendant in this book: ${int(top[0].n)} cases worth an estimated ${$k(top[0].value)}.`);
+  if (src[0]) brief.push(`${esc(src[0].key)} supplied the most cases (${int(src[0].n)}), with a ${pct(src[0].cbRate)} chargeback rate.`);
+  if (m.waitN) brief.push(`${int(m.waitN)} cases are won and waiting on payment, worth ${$k(m.wait)}.`);
+  const byGroup = GROUP_ORDER.map((g) => [g, sum(rows.filter((r) => r.group === g), 'n'), fees(rows.filter((r) => r.group === g))]).filter((x) => x[1]);
+  return head('Overview') + `
+  <div class="grid kpis">
+    <div class="kpi"><div class="l">Cases packaged</div><div class="v num">${int(m.n)}</div><div class="d">${esc(rangeNote())}</div></div>
+    <div class="kpi"><div class="l">Filed</div><div class="v num">${int(m.filed)}</div><div class="d">${pct(m.n ? m.filed / m.n : null)} of packaged</div></div>
+    <div class="kpi"><div class="l">Charged back</div><div class="v num">${int(m.cb)}</div><div class="d">${pct(m.cbRate)} of packaged</div></div>
+    <div class="kpi"><div class="l">Fees collected</div><div class="v num">${$k(m.col)}</div><div class="d">${int(m.colN)} cases paid</div></div>
+    <div class="kpi"><div class="l">Won, waiting on payment</div><div class="v num">${$k(m.wait)}</div><div class="d">${int(m.waitN)} cases</div></div>
+    <div class="kpi"><div class="l">Estimated value</div><div class="v num">${$k(m.value)}</div><div class="d">collected + waiting + open cases at history's odds</div></div>
+  </div>
+  <div class="panel"><h3>Cases packaged by month, and where they stand now</h3><p class="hint">${YEAR()} tracker cases, by the month they were packaged, colored by their stage in Zoho today.</p>${statusChart(D.cohort.filter((r) => inYear(r.m)), monthsChart())}</div>
+  <div class="grid two">
+    <div class="panel"><h3>From packaged to paid</h3><p class="hint">Cases packaged ${esc(rangeNote())}.</p>${funnel(m)}</div>
+    <div class="panel"><h3>What stands out</h3><p class="hint">${esc(rangeNote())}</p><ul class="brief">${brief.map((b) => `<li>${b}</li>`).join('') || '<li>No cases packaged in this period yet.</li>'}</ul></div>
+  </div>
+  <div class="panel"><h3>Where these cases stand</h3><p class="hint">Stage in Zoho today for cases packaged ${esc(rangeNote())}.</p><div class="tw"><table><thead><tr><th>Stage</th><th>Cases</th><th>Share</th><th>Fees</th></tr></thead><tbody>
+    ${byGroup.map(([g, c, f]) => `<tr style="cursor:default"><td><i style="display:inline-block;width:10px;height:10px;border-radius:1px;margin-right:8px;background:${GROUP_COLOR[g]}"></i>${esc(g)}</td><td class="num">${int(c)}</td><td class="num">${pct(c / Math.max(1, m.n))}</td><td class="num">${f && WON.includes(g) ? $k(f) : '–'}</td></tr>`).join('')}
+  </tbody></table></div></div>`;
+}
+
+let defShowAll = false, defSort = 'value';
+function sortableTable(rows, cols, rowAttr, first) {
+  const shown = defShowAll ? rows : rows.slice(0, 15);
+  const max = Math.max(1, ...rows.map((r) => r.value || 0));
+  return `<div class="tw"><table><thead><tr><th>${first}</th>${cols.map(([k, l]) => `<th data-sort="${k}" aria-sort="${defSort === k ? 'descending' : 'none'}">${l}${defSort === k ? ' ↓' : ''}</th>`).join('')}</tr></thead>
+    <tbody>${shown.map((r) => `<tr ${rowAttr}="${esc(r.key)}"><td class="barcell">${esc(r.key)}${r.tag ? ` <span class="tag">${esc(r.tag)}</span>` : ''}<span class="b" style="width:${((r.value || 0) / max) * 100}%"></span></td>${cols.map(([k, , f]) => `<td class="num${k === 'est' || k === 'value' ? ' est' : ''}">${f(r)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    ${rows.length > 15 ? `<button class="more" id="defAll">${defShowAll ? 'Show top 15' : `Show all ${rows.length}`}</button>` : ''}`;
+}
+const COLS = {
+  n: ['n', 'Packaged', (r) => int(r.n)], filed: ['filed', 'Filed', (r) => int(r.filed)], cb: ['cbRate', 'Charged back', (r) => r.cb ? `${int(r.cb)} <span class="sm">${pct(r.cbRate)}</span>` : '–'],
+  won: ['won', 'Won', (r) => r.won || '–'], col: ['col', 'Collected', (r) => (r.col ? $k(r.col) : '–')], wait: ['wait', 'Waiting', (r) => (r.wait ? $k(r.wait) : '–')],
+  est: ['est', 'Est. open value', (r) => (r.est ? $k(r.est) : '–')], value: ['value', 'Est. total value', (r) => (r.value ? $k(r.value) : '–')],
+};
+function renderDefendants() {
+  const set = RANGES[range].months();
+  const rows = statsBy(set, 'def').map((r) => { const h = histFor(r.key); return { ...r, tag: D.defendants[r.key] || '', histAvg: h.avg, histWin: h.win, histPaid: h.paid }; })
+    .sort((a, b) => (b[defSort] ?? -1) - (a[defSort] ?? -1));
+  const cols = [COLS.n, COLS.filed, COLS.cb, COLS.won, COLS.col, COLS.wait, COLS.value,
+    ['histAvg', 'Avg fee, history', (r) => (r.histPaid ? $k(r.histAvg) : '–')], ['histWin', 'Win rate, history', (r) => (r.histPaid ? pct(r.histWin) : '–')]];
+  return head('Defendants') + `<div class="panel"><h3>Value per company sued</h3>
+    <p class="hint">Cases packaged ${esc(rangeNote())}. Estimated total value = fees collected + fees won and waiting + open cases × that defendant's historical win rate × average fee (from all past Zoho cases). Click a row for detail.</p>
+    ${sortableTable(rows, cols, 'data-def', 'Defendant')}</div>`;
+}
+function renderSources() {
+  const set = RANGES[range].months();
+  const rows = statsBy(set, 'src').map((r) => { const cost = costFor(r.key, set); return { ...r, cost, cpp: cost && r.n ? cost / r.n : null, roi: cost ? r.value / cost : null }; }).sort((a, b) => (b[defSort] ?? -1) - (a[defSort] ?? -1));
+  const cols = [COLS.n, COLS.filed, COLS.cb, COLS.won, COLS.col, COLS.value,
+    ['cost', 'Cost', (r) => (r.cost ? $k(r.cost) : '<span class="est">not recorded</span>')], ['cpp', 'Cost per packaged case', (r) => (r.cpp ? $k(r.cpp) : '–')], ['roi', 'Est. value per $1', (r) => (r.roi ? '$' + r.roi.toFixed(1) : '–')]];
+  const months = monthsChart(), g = group(D.cohort.filter((r) => inYear(r.m)), (r) => r.m);
+  const names = rows.map((r) => r.key).slice(0, 7);
+  const stacks = names.map((s, i) => ({ label: s, color: COLORS[i], values: months.map((m) => sum((g[m] || []).filter((r) => r.src === s), 'n')) }));
+  return head('Case sources') + `<div class="panel"><h3>What each source is worth</h3>
+    <p class="hint">Source as recorded in the tracker, for cases packaged ${esc(rangeNote())}. Cost is shown only where recorded (Meta spend comes from the ad accounts). Click a row for detail.</p>
+    ${sortableTable(rows, cols, 'data-src', 'Source')}</div>
+    <div class="panel"><h3>Cases packaged by source</h3><p class="hint">${YEAR()}, by month packaged.</p>${bars({ months, stacks, fmt: int })}${legend(stacks.map((s) => [s.color, s.label]))}</div>`;
+}
+function renderTeam() {
+  const set = RANGES[range].months();
+  const rows = statsBy(set, 'member').sort((a, b) => b.n - a.n);
+  const months = monthsChart(), g = group(D.cohort.filter((r) => inYear(r.m)), (r) => r.m);
+  const stacks = rows.map((r, i) => ({ label: r.key, color: COLORS[i], values: months.map((m) => sum((g[m] || []).filter((x) => x.member === r.key), 'n')) }));
+  return head('Team') + `<div class="panel"><h3>Cases packaged by team member</h3><p class="hint">From the letter next to each case in the tracker, for cases packaged ${esc(rangeNote())}.</p>
+    <div class="tw"><table><thead><tr><th>Team member</th><th>Packaged</th><th>Complaint drafted</th><th>Filed</th><th>Charged back</th><th>Won</th><th>Est. total value</th></tr></thead><tbody>
+    ${rows.map((r) => `<tr style="cursor:default"><td>${esc(r.key)}</td><td class="num">${int(r.n)}</td><td class="num">${int(r.drafted)}</td><td class="num">${int(r.filed)} <span class="sm">${pct(r.n ? r.filed / r.n : null)}</span></td><td class="num">${int(r.cb)} <span class="sm">${pct(r.cbRate)}</span></td><td class="num">${int(r.won)}</td><td class="num est">${$k(r.value)}</td></tr>`).join('')}</tbody></table></div></div>
+    <div class="panel"><h3>Packaged per month</h3><p class="hint">${YEAR()}</p>${bars({ months, stacks, fmt: int })}${legend(stacks.map((s) => [s.color, s.label]))}</div>`;
+}
 
 function scDefStats(set, pset) {
   const rows = D.sc_def_month || [];
   const agg = (ms) => { const g = {}; for (const r of rows) if (inR(r.m, ms)) { const x = (g[r.name] ||= { clicks: 0, impressions: 0, posw: 0 }); x.clicks += r.clicks; x.impressions += r.impressions; x.posw += r.posw; } return g; };
-  const avail = D.sc_months_available || [];
-  const fair = pset && range !== 'month' && pset.every((m) => avail.includes(m));  // only compare full, covered periods
+  const fair = pset && range !== 'month' && pset.every((m) => (D.sc_months_available || []).includes(m));
   const cur = agg(set), pri = fair ? agg(pset) : {};
   const top = Object.fromEntries((D.sc_defendants || []).map((d) => [d.name, d.top[0]?.query || '']));
-  return Object.entries(cur).map(([name, c]) => ({ name, impressions: c.impressions, clicks: c.clicks, position: c.impressions ? c.posw / c.impressions : null, prior: fair ? pri[name]?.impressions || 0 : null, top: top[name] || '' }))
-    .sort((a, b) => b.impressions - a.impressions);
+  return Object.entries(cur).map(([name, c]) => ({ name, impressions: c.impressions, clicks: c.clicks, position: c.impressions ? c.posw / c.impressions : null, prior: fair ? pri[name]?.impressions || 0 : null, top: top[name] || '' })).sort((a, b) => b.impressions - a.impressions);
 }
-const scWhen = () => { const a = D.sc_months_available || []; return range === 'all' && a.length ? `since ${mLabel(a[0], true)} (Google keeps 16 months)` : PHRASE[range][0]; };
-
-/* ---------- views ---------- */
-const VIEWS = { overview: 'Overview', defendants: 'Defendants', sources: 'Case sources', marketing: 'Marketing', intake: 'Intake & pipeline' };
-let view = 'overview';
-function rangeCtl(keys = ['month', 'last', 'q', 'y', 'all']) {
-  return `<div class="seg" role="group" aria-label="Date range">${keys.map((k) => `<button data-range="${k}" aria-pressed="${k === range}">${RANGES[k].label}</button>`).join('')}</div>`;
-}
-function head(title) { return `<div class="bar"><h2>${esc(title)}</h2>${rangeCtl()}</div>`; }
-
-function renderOverview() {
-  const r = RANGES[range], set = r.months?.(), prior = r.prior?.();
-  const cur = paidIn(set), pri = prior ? paidIn(prior) : [];
-  const f = fees(cur), n = sum(cur, 'n'), fp = fees(pri), np = sum(pri, 'n');
-  const won = D.open.filter((o) => o.group === 'Won, not collected'), active = D.open.filter((o) => ACTIVE.includes(o.group));
-  let paceNote = '';
-  if (range === 'month') {
-    const [y, mo] = curM.split('-').map(Number), done = weekdays(y, mo, now.getUTCDate()), all = weekdays(y, mo);
-    const pace = done ? f / done * all : 0; paceNote = `On pace for ${$k(pace)} with ${all - done} business days left. ${mLabel(addM(curM, -1))} was ${$k(fp)}.`;
-  }
-  const months = monthsBack(24);
-  const byM = group(D.paid, (x) => x.m);
-  const vals = months.map((m) => fees(byM[m] || []));
-  const ghost = months.map((m) => fees(byM[addM(m, -12)] || []));
-  const top = defendantStats(set).sort((a, b) => b.fees - a.fees);
-  const topShare = f ? top[0]?.fees / f : 0;
-  const top5 = top.slice(0, 6), maxF = Math.max(1, ...top5.map((t) => t.fees));
-
-  const brief = [];
-  if (top[0]) brief.push(`${esc(top[0].def)} produced ${pct(topShare)} of fees (${$k(top[0].fees)} from ${top[0].paid} cases, ${$k(top[0].avg)} each).`);
-  if (np) brief.push(`Average fee per paid case is ${$k(n ? f / n : 0)}, versus ${$k(fp / np)} in the prior period.`);
-  brief.push(`${int(sum(won, 'n'))} cases are won but not yet collected, carrying ${$k(fees(won))} in fees${sum(won, 'n') ? `, on average ${Math.round(sum(won, 'age_sum') / sum(won, 'n'))} days since settling` : ''}.`);
-
-  return head('Overview') + `
-  <div class="grid kpis">
-    <div class="kpi"><div class="l">Fees collected</div><div class="v num">${$k(f)}</div><div class="d">${chg(f, fp)} ${prior ? 'vs prior period' : ''}</div></div>
-    <div class="kpi"><div class="l">Cases paid</div><div class="v num">${int(n)}</div><div class="d">${chg(n, np)}</div></div>
-    <div class="kpi"><div class="l">Average fee per case</div><div class="v num">${$k(n ? f / n : 0)}</div><div class="d">${np ? chg(f / (n || 1), fp / np) : ''}</div></div>
-    <div class="kpi"><div class="l">Won, not collected</div><div class="v num">${$k(fees(won))}</div><div class="d">${int(sum(won, 'n'))} cases waiting on payment</div></div>
-    <div class="kpi"><div class="l">Open cases being worked</div><div class="v num">${int(sum(active, 'n'))}</div><div class="d">signing, demand or litigation</div></div>
-  </div>
-  ${paceNote ? `<div class="panel pace"><strong>${paceNote}</strong></div>` : ''}
-  <div class="panel"><h3>Fees collected by month</h3><p class="hint">Last 24 months, dated by settlement paid date. The dashed line is the same month a year earlier.</p>
-    ${bars({ months, stacks: [{ label: 'Fees', color: 'var(--navy)', values: vals }], ghost, highlight: set || null })}
-  </div>
-  <div class="grid two">
-    <div class="panel"><h3>What stands out</h3><p class="hint">${esc(rangeNote())}</p><ul class="brief">${brief.map((b) => `<li>${b}</li>`).join('')}</ul></div>
-    <div class="panel"><h3>Where the fees came from</h3><p class="hint">Top defendants, ${esc(rangeNote())}</p>
-      <table><tbody>${top5.map((t) => `<tr data-def="${esc(t.def)}"><td class="barcell">${esc(t.def)}<span class="b" style="width:${(t.fees / maxF) * 100}%"></span></td><td class="num">${$k(t.fees)}</td><td class="num">${t.paid} paid</td></tr>`).join('')}</tbody></table>
-    </div>
-  </div>`;
-}
-
-let defShowAll = false, defSort = 'fees';
-function renderDefendants() {
-  const set = RANGES[range].months?.();
-  let rows = defendantStats(set).sort((a, b) => (b[defSort] ?? -1) - (a[defSort] ?? -1));
-  const total = sum(rows, 'fees'), max = Math.max(1, ...rows.map((r) => r.fees));
-  const shown = defShowAll ? rows : rows.slice(0, 15);
-  const col = (k, l) => `<th data-sort="${k}" aria-sort="${defSort === k ? 'descending' : 'none'}">${l}${defSort === k ? ' ↓' : ''}</th>`;
-  return head('Defendants') + `
-  <div class="panel"><h3>Value per company sued</h3>
-  <p class="hint">Fees and paid cases are for ${esc(rangeNote())}. Win rate and time to payment use all history (paid ÷ paid + dismissed). Estimated open value = open cases (excluding failed demands and on-hold) × win rate × average fee, an estimate only. Click a row for detail.</p>
-  <div class="tw"><table>
-    <thead><tr><th>Defendant</th>${col('paid', 'Paid')}${col('fees', 'Fees')}${col('avg', 'Avg fee')}${col('win', 'Win rate')}${col('months', 'Months to paid')}${col('openN', 'Open now')}${col('wonFees', 'Won, not collected')}${col('est', 'Est. open value')}</tr></thead>
-    <tbody>${shown.map((r) => `<tr data-def="${esc(r.def)}">
-      <td class="barcell">${esc(r.def)} <span class="tag">${esc(r.type)}</span><span class="b" style="width:${(r.fees / max) * 100}%"></span></td>
-      <td class="num">${r.paid || '–'}</td><td class="num">${r.fees ? $k(r.fees) : '–'}</td><td class="num">${r.avg ? $k(r.avg) : '–'}</td>
-      <td class="num">${pct(r.win)}</td><td class="num">${r.months ? r.months.toFixed(1) : '–'}</td><td class="num">${r.openN || '–'}</td>
-      <td class="num">${r.wonFees ? $k(r.wonFees) : r.wonN ? r.wonN + ' cases' : '–'}</td><td class="num est">${r.est ? $k(r.est) : '–'}</td></tr>`).join('')}</tbody>
-    <tfoot><tr><td><strong>All defendants</strong></td><td class="num">${int(sum(rows, 'paid'))}</td><td class="num"><strong>${$k(total)}</strong></td><td></td><td></td><td></td><td class="num">${int(sum(rows, 'openN'))}</td><td class="num">${$k(sum(rows, 'wonFees'))}</td><td class="num est">${$k(sum(rows, (r) => r.est || 0))}</td></tr></tfoot>
-  </table></div>
-  ${rows.length > 15 ? `<button class="more" id="defAll">${defShowAll ? 'Show top 15' : `Show all ${rows.length}`}</button>` : ''}
-  </div>
-  ${byTypePanel(set)}`;
-}
-function byTypePanel(set) {
-  const g = group(paidIn(set), (r) => r.type);
-  const rows = Object.entries(g).map(([t, rs]) => ({ t, n: sum(rs, 'n'), f: fees(rs) })).sort((a, b) => b.f - a.f);
-  return `<div class="panel"><h3>By case type</h3><p class="hint">${esc(rangeNote())}</p><div class="tw"><table><thead><tr><th>Case type</th><th>Paid</th><th>Fees</th><th>Avg fee</th><th>Share of fees</th></tr></thead><tbody>
-  ${rows.map((r) => `<tr><td>${esc(r.t)}</td><td class="num">${r.n}</td><td class="num">${$k(r.f)}</td><td class="num">${$k(r.n ? r.f / r.n : 0)}</td><td class="num">${pct(r.f / Math.max(1, sum(rows, 'f')))}</td></tr>`).join('')}
-  </tbody></table></div></div>`;
-}
-
-function renderSources() {
-  const set = RANGES[range].months?.();
-  const rows = sourceStats(set).sort((a, b) => b.fees - a.fees || b.signed - a.signed);
-  const months = monthsBack(18);
-  const srcNames = rows.map((r) => r.src).slice(0, 7);
-  const sg = group(D.signed.filter((r) => r.m !== 'import'), (r) => r.m);
-  const stacks = srcNames.map((s, i) => ({ label: s, color: COLORS[i], values: months.map((m) => sum((sg[m] || []).filter((r) => r.src === s), 'n')) }));
-  return head('Case sources') + `
-  <div class="panel"><h3>What each source is worth</h3>
-  <p class="hint">Signed cases are dated by retainer date; paid cases and fees by payment date, both for ${esc(rangeNote())}. Cost is shown only where it is recorded (Meta spend comes from the ad accounts). Click a row for detail.</p>
-  <div class="tw"><table><thead><tr><th>Source</th><th>Leads</th><th>Cases signed</th><th>Cases paid</th><th>Fees</th><th>Avg fee</th><th>Win rate</th><th>Cost</th><th>Cost per signed case</th></tr></thead>
-  <tbody>${rows.map((r) => `<tr data-src="${esc(r.src)}"><td>${esc(r.src)}</td><td class="num">${r.leads ? int(r.leads) : '–'}</td><td class="num">${r.signed || '–'}</td><td class="num">${r.paid || '–'}</td>
-    <td class="num">${r.fees ? $k(r.fees) : '–'}</td><td class="num">${r.avg ? $k(r.avg) : '–'}</td><td class="num">${pct(r.win)}</td>
-    <td class="num">${r.cost ? $k(r.cost) : '<span class="est">not recorded</span>'}</td><td class="num">${r.cps ? $k(r.cps) : '–'}</td></tr>`).join('')}</tbody></table></div></div>
-  <div class="panel"><h3>Cases signed by source</h3><p class="hint">Last 18 months, by retainer date.</p>${bars({ months, stacks, fmt: int })}${legend(stacks.map((s) => [s.color, s.label]))}</div>`;
-}
-
 function renderMarketing() {
-  const set = RANGES[range].months?.();
-  const months = monthsBack(Math.min(28, Math.max(12, monthsSince(D.meta_month.map((r) => r.m).sort()[0]))));
-  const accts = [...new Set(D.meta_month.map((r) => r.account))];
+  const set = RANGES[range].months(), pset = RANGES[range].prior();
+  const months = monthsChart();
+  const accts = [...new Set(D.meta_month.map((r) => r.account))].sort((a, b) => (a === 'Current account' ? -1 : b === 'Current account' ? 1 : 0));
   const mm = group(D.meta_month, (r) => r.m);
-  accts.sort((a, b) => (a === 'Current account' ? -1 : b === 'Current account' ? 1 : 0));
   const stacks = accts.map((a, i) => ({ label: a, color: i ? 'var(--s6)' : 'var(--navy)', values: months.map((m) => sum((mm[m] || []).filter((r) => r.account === a), 'spend')) }));
   const spend = sum(D.meta_month.filter((r) => inR(r.m, set)), 'spend'), leads = sum(D.meta_month.filter((r) => inR(r.m, set)), 'leads');
-  const signedMeta = sum(signedIn(set, (r) => r.src === 'Meta'), 'n'), paidMeta = paidIn(set, (r) => r.src === 'Meta');
-  const allMetaFees = fees(D.paid.filter((r) => r.src === 'Meta')), allSpend = sum(D.meta_month, 'spend');
-  const ga = group(D.ga4_month, (r) => r.channel); const chans = Object.keys(ga).sort((a, b) => sum(ga[b], 'sessions') - sum(ga[a], 'sessions')).slice(0, 5);
-  const gm = monthsBack(15); const gStacks = chans.map((c, i) => ({ label: c, color: COLORS[i], values: gm.map((m) => sum(ga[c].filter((r) => r.m === m), 'sessions')) }));
-  const sd = scDefStats(set, RANGES[range].prior?.());
+  const mc = metrics(C(set, (r) => r.src === 'Meta'));
+  const sd = scDefStats(set, pset);
+  const ga = group(D.ga4_month.filter((r) => inYear(r.m)), (r) => r.channel); const chans = Object.keys(ga).sort((a, b) => sum(ga[b], 'sessions') - sum(ga[a], 'sessions')).slice(0, 5);
+  const gStacks = chans.map((c, i) => ({ label: c, color: COLORS[i], values: months.map((m) => sum(ga[c].filter((r) => r.m === m), 'sessions')) }));
   return head('Marketing') + `
   <div class="grid kpis">
-    <div class="kpi"><div class="l">Meta spend</div><div class="v num">${$k(spend)}</div><div class="d">${esc(rangeNote())}</div></div>
-    <div class="kpi"><div class="l">Meta leads</div><div class="v num">${int(leads)}</div><div class="d">${leads ? $k(spend / leads) + ' per lead' : ''}</div></div>
-    <div class="kpi"><div class="l">Cases signed from Meta</div><div class="v num">${int(signedMeta)}</div><div class="d">${signedMeta ? $k(spend / signedMeta) + ' per signed case' : 'source recorded in Zoho'}</div></div>
-    <div class="kpi"><div class="l">Fees from Meta cases</div><div class="v num">${$k(fees(paidMeta))}</div><div class="d">all time ${$k(allMetaFees)} on ${$k(allSpend)} spent</div></div>
+    <div class="kpi"><div class="l">Meta spend</div><div class="v num">${$k(spend)}</div><div class="d">${int(leads)} leads${leads ? `, ${$k(spend / leads)} each` : ''}</div></div>
+    <div class="kpi"><div class="l">Meta cases packaged</div><div class="v num">${int(mc.n)}</div><div class="d">${mc.n && spend ? $k(spend / mc.n) + ' per packaged case' : 'source from the tracker'}</div></div>
+    <div class="kpi"><div class="l">Meta chargebacks</div><div class="v num">${int(mc.cb)}</div><div class="d">${pct(mc.cbRate)} of Meta cases</div></div>
+    <div class="kpi"><div class="l">Est. value of Meta cases</div><div class="v num">${$k(mc.value)}</div><div class="d">${spend ? '$' + (mc.value / spend).toFixed(1) + ' per $1 spent' : ''}</div></div>
   </div>
-  <div class="panel"><h3>Meta spend by month</h3><p class="hint">Both ad accounts combined. Last spend recorded ${esc(D.meta_last_spend || '–')}.</p>${bars({ months, stacks })}${legend(stacks.map((s) => [s.color, s.label]))}</div>
-  <div class="panel"><h3>People searching the companies you sue</h3><p class="hint">Times the firm's site showed in Google for searches naming each company, ${esc(scWhen())}, with change against the period before where Google has the full comparison period. Average position is the firm's rank in website results, not the map. Google reports with a 2–3 day delay.</p>
+  <div class="panel"><h3>Meta spend by month</h3><p class="hint">${YEAR()}, both ad accounts. Last spend recorded ${esc(D.meta_last_spend || '–')}.</p>${bars({ months, stacks })}${legend(stacks.map((s) => [s.color, s.label]))}</div>
+  <div class="panel"><h3>People searching the companies you sue</h3><p class="hint">Times the firm's site showed in Google for searches naming each company, ${esc(rangeNote())}, with change against the period before when Google has the full comparison. Average position is the firm's rank in website results, not the map. Google reports with a 2–3 day delay.</p>
     ${sd.length ? `<div class="tw"><table><thead><tr><th>Company</th><th>Times shown</th><th>Change</th><th>Clicks</th><th>Avg position</th><th style="text-align:left">Top search, last 90 days</th></tr></thead><tbody>
-    ${sd.map((x) => `<tr><td>${esc(x.name)}</td><td class="num">${int(x.impressions)}</td><td class="num">${x.prior == null ? '–' : chg(x.impressions, x.prior) || '<span class="tag">new</span>'}</td><td class="num">${int(x.clicks)}</td><td class="num">${x.position ? x.position.toFixed(1) : '–'}</td><td style="text-align:left;white-space:normal">${esc(x.top)}</td></tr>`).join('')}
-    </tbody></table></div>` : '<p class="empty">No company-name searches in this period.</p>'}
+    ${sd.map((x) => `<tr style="cursor:default"><td>${esc(x.name)}</td><td class="num">${int(x.impressions)}</td><td class="num">${x.prior == null ? '–' : chg(x.impressions, x.prior) || '<span class="tag">new</span>'}</td><td class="num">${int(x.clicks)}</td><td class="num">${x.position ? x.position.toFixed(1) : '–'}</td><td style="text-align:left;white-space:normal">${esc(x.top)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">No company-name searches in this period.</p>'}
   </div>
   <div class="grid two">
     <div class="panel"><h3>Top searches</h3><p class="hint">Last 90 days, by clicks.</p><div class="tw"><table><thead><tr><th>Search</th><th>Clicks</th><th>Position</th><th>vs prior 90 days</th></tr></thead><tbody>
-      ${D.sc_queries.slice(0, 12).map((q) => { const d = q.prior != null ? q.prior - q.position : null; return `<tr><td>${esc(q.query)}</td><td class="num">${int(q.clicks)}</td><td class="num">${q.position.toFixed(1)}</td><td class="num">${d == null ? '<span class="tag">new</span>' : `<span class="${d >= 0 ? 'up' : 'down'}">${d >= 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(1)}</span>`}</td></tr>`; }).join('')}</tbody></table></div></div>
-    <div class="panel"><h3>Website visits by channel</h3><p class="hint">Last 15 months, Google Analytics.</p>${bars({ months: gm, stacks: gStacks, fmt: int, height: 200, half: true })}${legend(gStacks.map((s) => [s.color, s.label]))}</div>
+      ${D.sc_queries.slice(0, 12).map((q) => { const d = q.prior != null ? q.prior - q.position : null; return `<tr style="cursor:default"><td>${esc(q.query)}</td><td class="num">${int(q.clicks)}</td><td class="num">${q.position.toFixed(1)}</td><td class="num">${d == null ? '<span class="tag">new</span>' : `<span class="${d >= 0 ? 'up' : 'down'}">${d >= 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(1)}</span>`}</td></tr>`; }).join('')}</tbody></table></div></div>
+    <div class="panel"><h3>Website visits by channel</h3><p class="hint">${YEAR()}, Google Analytics.</p>${bars({ months, stacks: gStacks, fmt: int, height: 200, half: true })}${legend(gStacks.map((s) => [s.color, s.label]))}</div>
   </div>`;
 }
-const monthsSince = (m) => { if (!m) return 12; const [y, mo] = m.split('-').map(Number), [cy, cm] = curM.split('-').map(Number); return (cy - y) * 12 + cm - mo + 1; };
-
 function renderIntake() {
-  const set = RANGES[range].months?.();
-  const lm = monthsBack(15), lg = group(D.leads, (r) => r.m);
-  const srcs = Object.entries(group(D.leads, (r) => r.src)).sort((a, b) => sum(b[1], 'n') - sum(a[1], 'n')).map(([s]) => s).slice(0, 6);
-  const stacks = srcs.map((s, i) => ({ label: s, color: COLORS[i], values: lm.map((m) => sum((lg[m] || []).filter((r) => r.src === s), 'n')) }));
-  const conv = srcs.map((s) => { const r = D.leads.filter((x) => x.src === s && inR(x.m, set)); return { s, n: sum(r, 'n'), c: sum(r, 'cases'), f: sum(r, 'fees') }; });
-  const st = Object.entries(group(D.lead_status_90, (r) => r.status)).map(([k, v]) => [k, sum(v, 'n')]).sort((a, b) => b[1] - a[1]);
-  const stTotal = sum(st, (x) => x[1]);
-  const order = ['Signing', 'Demand', 'Litigation', 'Won, not collected', 'On hold'];
-  const og = group(D.open, (r) => r.group);
-  const stages = group(D.open, (r) => r.stage);
+  const set = RANGES[range].months(), months = monthsChart();
+  const L = D.leads.filter((r) => inYear(r.m)), lg = group(L, (r) => r.m);
+  const srcs = Object.entries(group(L, (r) => r.src)).sort((a, b) => sum(b[1], 'n') - sum(a[1], 'n')).map(([s]) => s).slice(0, 6);
+  const stacks = srcs.map((s, i) => ({ label: s, color: COLORS[i], values: months.map((m) => sum((lg[m] || []).filter((r) => r.src === s), 'n')) }));
+  const conv = srcs.map((s) => { const r = D.leads.filter((x) => x.src === s && inR(x.m, set)); return { s, n: sum(r, 'n'), c: sum(r, 'cases') }; });
+  const st = Object.entries(group(D.lead_status_90, (r) => r.status)).map(([k, v]) => [k, sum(v, 'n')]).sort((a, b) => b[1] - a[1]); const stTotal = sum(st, (x) => x[1]);
+  const rows = C(set), stages = group(rows.filter((r) => r.stage), (r) => r.stage);
   return head('Intake & pipeline') + `
-  <div class="panel"><h3>Leads by month</h3><p class="hint">Last 15 months, from Zoho leads.</p>${bars({ months: lm, stacks, fmt: int })}${legend(stacks.map((s) => [s.color, s.label]))}</div>
+  <div class="panel"><h3>Leads by month</h3><p class="hint">${YEAR()}, from Zoho leads, by lead source in Zoho.</p>${bars({ months, stacks, fmt: int })}${legend(stacks.map((s) => [s.color, s.label]))}</div>
   <div class="grid two">
-    <div class="panel"><h3>Leads that became cases</h3><p class="hint">Leads created ${esc(rangeNote())}. Fees are what those same leads have paid so far.</p><div class="tw"><table><thead><tr><th>Source</th><th>Leads</th><th>Became cases</th><th>Rate</th><th>Fees so far</th></tr></thead><tbody>
-      ${conv.map((r) => `<tr><td>${esc(r.s)}</td><td class="num">${int(r.n)}</td><td class="num">${int(r.c)}</td><td class="num">${pct(r.n ? r.c / r.n : null)}</td><td class="num">${r.f ? $k(r.f) : '–'}</td></tr>`).join('')}</tbody></table></div></div>
+    <div class="panel"><h3>Leads that became cases</h3><p class="hint">Leads created ${esc(rangeNote())}.</p><div class="tw"><table><thead><tr><th>Source</th><th>Leads</th><th>Became cases</th><th>Rate</th></tr></thead><tbody>
+      ${conv.map((r) => `<tr style="cursor:default"><td>${esc(r.s)}</td><td class="num">${int(r.n)}</td><td class="num">${int(r.c)}</td><td class="num">${pct(r.n ? r.c / r.n : null)}</td></tr>`).join('')}</tbody></table></div></div>
     <div class="panel"><h3>What happened to last 90 days of leads</h3><p class="hint">Lead status in Zoho today.</p><table><tbody>
-      ${st.slice(0, 10).map(([k, v]) => `<tr><td class="barcell">${esc(k)}<span class="b" style="width:${(v / Math.max(1, st[0][1])) * 100}%"></span></td><td class="num">${int(v)}</td><td class="num">${pct(v / stTotal)}</td></tr>`).join('')}</tbody></table></div>
+      ${st.slice(0, 10).map(([k, v]) => `<tr style="cursor:default"><td class="barcell">${esc(k)}<span class="b" style="width:${(v / Math.max(1, st[0][1])) * 100}%"></span></td><td class="num">${int(v)}</td><td class="num">${pct(v / stTotal)}</td></tr>`).join('')}</tbody></table></div>
   </div>
-  <div class="panel"><h3>Open cases today</h3><p class="hint">Where every open case sits, and how long it has been in that stage on average.</p><div class="tw"><table><thead><tr><th>Stage</th><th>Cases</th><th>Avg days in stage</th><th>Fees agreed</th></tr></thead><tbody>
-    ${order.flatMap((g) => { const s = Object.entries(stages).filter(([, v]) => v[0].group === g); return [`<tr style="cursor:default"><td colspan="4"><strong>${esc(g)}</strong> <span class="tag">${int(sum(og[g] || [], 'n'))}</span></td></tr>`, ...s.map(([k, v]) => `<tr style="cursor:default"><td>&nbsp;&nbsp;${esc(k)}</td><td class="num">${int(sum(v, 'n'))}</td><td class="num">${Math.round(sum(v, 'age_sum') / Math.max(1, sum(v, 'n')))}</td><td class="num">${fees(v) ? $k(fees(v)) : '–'}</td></tr>`)]; }).join('')}
+  <div class="panel"><h3>Packaged cases by stage in Zoho</h3><p class="hint">Cases packaged ${esc(rangeNote())}. Days waiting is shown for cases won but not yet paid.</p><div class="tw"><table><thead><tr><th>Stage</th><th>Cases</th><th>Fees recorded</th><th>Avg days waiting</th></tr></thead><tbody>
+    ${GROUP_ORDER.filter((g) => g !== 'Charged back' && g !== 'Not found in Zoho').flatMap((gname) => { const s = Object.entries(stages).filter(([, v]) => v[0].group === gname); if (!s.length) return []; return [`<tr style="cursor:default"><td colspan="4"><strong>${esc(gname)}</strong> <span class="tag">${int(sum(s.flatMap(([, v]) => v), 'n'))}</span></td></tr>`, ...s.map(([k, v]) => `<tr style="cursor:default"><td>&nbsp;&nbsp;${esc(k)}</td><td class="num">${int(sum(v, 'n'))}</td><td class="num">${fees(v) && WON.includes(gname) ? $k(fees(v)) : '–'}</td><td class="num">${gname === 'Won, not collected' ? Math.round(sum(v, 'age_sum') / Math.max(1, sum(v, 'n'))) : '–'}</td></tr>`)]; }).join('')}
+    ${['Charged back', 'Not found in Zoho'].map((g) => { const c = sum(rows.filter((r) => r.group === g), 'n'); return c ? `<tr style="cursor:default"><td><strong>${g}</strong></td><td class="num">${int(c)}</td><td></td><td></td></tr>` : ''; }).join('')}
   </tbody></table></div></div>`;
 }
 
@@ -452,81 +436,62 @@ function openDrawer(html) { $('#dbody').innerHTML = html; $('#drawer').classList
 function closeDrawer() { $('#drawer').classList.remove('open'); $('#drawer').setAttribute('aria-hidden', 'true'); }
 $('#drawer .scrim').onclick = closeDrawer; $('#drawer .x').onclick = closeDrawer;
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
-
-function defDrawer(def) {
-  const months = monthsBack(24), rows = D.paid.filter((r) => r.def === def), g = group(rows, (r) => r.m);
-  const s = defendantStats(null).find((x) => x.def === def) || {};
-  const bySrc = Object.entries(group(rows, (r) => r.src)).map(([k, v]) => [k, sum(v, 'n'), fees(v)]).sort((a, b) => b[2] - a[2]);
-  const open = Object.entries(group(D.open.filter((r) => r.def === def), (r) => r.stage)).map(([k, v]) => [k, sum(v, 'n')]).sort((a, b) => b[1] - a[1]);
-  const set = sum(rows, 'settle'), f = fees(rows), p = sum(rows, 'payout'), o = sum(rows, 'other'), w = sum(rows, 'waived');
-  openDrawer(`<h3>${esc(def)}</h3><p class="hint">${esc(s.type || '')} · all history</p>
-    <div class="grid kpis" style="margin:14px 0"><div class="kpi"><div class="l">Fees</div><div class="v num">${$k(f)}</div></div><div class="kpi"><div class="l">Paid cases</div><div class="v num">${sum(rows, 'n')}</div></div><div class="kpi"><div class="l">Win rate</div><div class="v num">${pct(s.win)}</div></div></div>
-    <h4>Fees by month</h4>${bars({ months, stacks: [{ label: 'Fees', color: 'var(--navy)', values: months.map((m) => fees(g[m] || [])) }], height: 150, half: true })}
-    <h4>Where each settlement dollar went</h4><table><tbody>
-      <tr><td>Settlements paid by ${esc(def)}</td><td class="num">${$f(set)}</td></tr>
-      <tr><td>Attorney fees</td><td class="num">${$f(f)}</td></tr><tr><td>Client payouts</td><td class="num">${$f(p)}</td></tr>
-      <tr><td>Costs and other</td><td class="num">${$f(o)}</td></tr><tr><td>Debt waived for clients <span class="sm">not cash, not counted in fees</span></td><td class="num">${$f(w)}</td></tr></tbody></table>
-    <h4>Paid cases by source</h4><table><tbody>${bySrc.map(([k, n, v]) => `<tr><td>${esc(k)}</td><td class="num">${n}</td><td class="num">${$k(v)}</td></tr>`).join('') || '<tr><td>None yet</td></tr>'}</tbody></table>
-    <h4>Open cases by stage</h4><table><tbody>${open.map(([k, n]) => `<tr><td>${esc(k)}</td><td class="num">${n}</td></tr>`).join('') || '<tr><td>None open</td></tr>'}</tbody></table>
-    <p class="hint" style="margin-top:14px">Case list: Zoho › Cases, filter Debt Collector Name = ${esc(def)}.</p>`);
-}
-function srcDrawer(src) {
-  const rows = D.paid.filter((r) => r.src === src);
-  const byDef = Object.entries(group(rows, (r) => r.def)).map(([k, v]) => [k, sum(v, 'n'), fees(v)]).sort((a, b) => b[2] - a[2]).slice(0, 12);
-  const months = monthsBack(18), sg = D.signed.filter((r) => r.src === src && r.m !== 'import');
-  openDrawer(`<h3>${esc(src)}</h3><p class="hint">All history</p>
-    <div class="grid kpis" style="margin:14px 0"><div class="kpi"><div class="l">Fees</div><div class="v num">${$k(fees(rows))}</div></div><div class="kpi"><div class="l">Paid cases</div><div class="v num">${sum(rows, 'n')}</div></div><div class="kpi"><div class="l">Avg fee</div><div class="v num">${$k(fees(rows) / Math.max(1, sum(rows, 'n')))}</div></div></div>
-    <h4>Cases signed by month</h4>${bars({ months, stacks: [{ label: 'Signed', color: 'var(--green)', values: months.map((m) => sum(sg.filter((r) => r.m === m), 'n')) }], fmt: int, height: 150, half: true })}
-    <h4>Which defendants this source's cases paid on</h4><table><tbody>${byDef.map(([k, n, v]) => `<tr><td>${esc(k)}</td><td class="num">${n}</td><td class="num">${$k(v)}</td></tr>`).join('') || '<tr><td>None yet</td></tr>'}</tbody></table>
-    <p class="hint" style="margin-top:14px">Case list: Zoho › Cases, filter Lead Source.</p>`);
+function drawer(key, field, title) {
+  const set = RANGES[range].months(), rows = C(set, (r) => r[field] === key), m = metrics(rows), months = monthsChart();
+  const other = field === 'def' ? 'src' : 'def';
+  const split = Object.entries(group(rows, (r) => r[other])).map(([k, v]) => [k, sum(v, 'n'), metrics(v).value]).sort((a, b) => b[1] - a[1]).slice(0, 12);
+  const h = field === 'def' ? histFor(key) : null;
+  openDrawer(`<h3>${esc(key)}</h3><p class="hint">${esc(title)} · cases packaged ${esc(rangeNote())}</p>
+    <div class="grid kpis" style="margin:14px 0"><div class="kpi"><div class="l">Packaged</div><div class="v num">${int(m.n)}</div></div><div class="kpi"><div class="l">Charged back</div><div class="v num">${pct(m.cbRate)}</div></div><div class="kpi"><div class="l">Est. value</div><div class="v num">${$k(m.value)}</div></div></div>
+    <h4>By month and stage</h4>${statusChart(D.cohort.filter((r) => inYear(r.m) && r[field] === key), months)}
+    <h4>Where the money stands</h4><table><tbody>
+      <tr><td>Fees collected</td><td class="num">${$f(m.col)}</td></tr><tr><td>Fees won, waiting on payment</td><td class="num">${$f(m.wait)}</td></tr>
+      <tr><td>Open cases being worked</td><td class="num">${int(m.actN)}</td></tr><tr><td>Estimated value of open cases <span class="sm">history's win rate × average fee</span></td><td class="num">${$f(m.est)}</td></tr></tbody></table>
+    ${h ? `<h4>History with ${esc(key)}</h4><table><tbody><tr><td>Past cases paid</td><td class="num">${int(h.paid)}</td></tr><tr><td>Win rate</td><td class="num">${pct(h.win)}</td></tr><tr><td>Average fee</td><td class="num">${$k(h.avg)}</td></tr></tbody></table>` : ''}
+    <h4>By ${other === 'src' ? 'source' : 'defendant'}</h4><table><tbody>${split.map(([k, n, v]) => `<tr><td>${esc(k)}</td><td class="num">${n}</td><td class="num est">${$k(v)}</td></tr>`).join('') || '<tr><td>None</td></tr>'}</tbody></table>
+    <p class="hint" style="margin-top:14px">Case list: JCL Tracker › monthly tabs, and Zoho › Cases.</p>`);
 }
 
-
-/* ---------- hero: follows the tab and the date range ---------- */
-const PHRASE = { month: ['this month so far', 'last month'], last: ['last month', 'the month before'], q: ['over the last 3 months', 'the 3 months before'], y: ['over the last 12 months', 'the year before'], all: ['across all history', null] };
+/* ---------- hero ---------- */
+const PHRASE = { month: ['this month so far', 'last month'], last: ['last month', 'the month before'], q: ['over the last 3 months', 'the 3 months before'], ytd: [`so far in ${new Date().getUTCFullYear()}`, null] };
+const cases = (k) => `${int(k)} case${Math.round(k) === 1 ? '' : 's'}`;
 function paceOf(v) { const [y, mo] = curM.split('-').map(Number), done = weekdays(y, mo, now.getUTCDate()), all = weekdays(y, mo); return done ? v / done * all : v; }
-function vs(a, b, prior, fmt = $k) {
+function vs(a, b, prior, fmt = int) {
   if (!prior || !b) return '';
   if (range === 'month') return `, on pace for ${fmt(paceOf(a))} against ${fmt(b)} last month`;
   const c = Math.round(((a - b) / b) * 100);
   return Math.abs(c) < 1 ? `, flat on ${prior}` : `, ${c >= 0 ? 'up' : 'down'} ${Math.abs(c)}% on ${prior}`;
 }
 function hero() {
-  const r = RANGES[range], set = r.months?.(), pset = r.prior?.(), [when, prior] = PHRASE[range];
-  // For "this month", compare to the same number of days last month is not possible with monthly data; compare to full last month instead.
-  const priorLabel = prior;
+  const r = RANGES[range], set = r.months(), pset = r.prior(), [when, prior] = PHRASE[range];
   const G = (v) => `<b>${v}</b>`;
+  const m = metrics(C(set)), pm = pset ? metrics(C(pset)) : null;
   let h = '', st = [];
   if (view === 'overview') {
-    const cur = paidIn(set), pri = pset ? paidIn(pset) : [];
-    const f = fees(cur), fp = fees(pri), n = sum(cur, 'n'), np = sum(pri, 'n');
-    h = `${G($k(f))} in fees collected ${when}${vs(f, fp, priorLabel)}.`;
-    const top = defendantStats(set).filter((d) => d.paid).sort((a, b) => b.fees - a.fees)[0];
-    const nPaid = sum(D.paid, 'n'), nLost = sum(D.lost, 'n');
-    st = [[int(n), `cases paid${np ? `, versus ${int(np)} ${prior}` : ''}`], [$k(n ? f / n : 0), `average fee per case${np ? `, versus ${$k(fp / np)}` : ''}`]];
-    if (top) st.push([$k(top.fees), `from ${esc(top.def)}, the top defendant`]);
+    h = `${G(int(m.n))} cases packaged ${when}${vs(m.n, pm?.n, prior)}, worth an estimated ${$k(m.value)}.`;
+    st = [[$k(m.col), `fees collected, ${cases(m.colN)}`], [$k(m.wait), `won, waiting on payment (${cases(m.waitN)})`], [pct(m.cbRate), `charged back (${cases(m.cb)})`]];
   } else if (view === 'defendants') {
-    const ds = defendantStats(set).filter((d) => d.paid).sort((a, b) => b.fees - a.fees), tot = sum(ds, 'fees'), t = ds[0];
-    h = t ? `${G(esc(t.def))} paid ${$k(t.fees)} in fees ${when}, ${pct(t.fees / tot)} of the total.` : `No defendant payments ${when}.`;
-    const active = D.open.filter((o) => ACTIVE.includes(o.group) && o.stage !== 'Failed Demand');
-    st = [[int(ds.length), `defendants paid ${when}`], [t ? $k(t.avg) : '–', t ? `average fee on ${esc(t.def)}` : 'average fee'], [int(sum(active, 'n')), 'open cases against defendants being worked now']];
+    const t = statsBy(set, 'def').sort((a, b) => b.value - a.value)[0];
+    h = t ? `${G(esc(t.key))} is the biggest defendant ${when}: ${cases(t.n)} worth an estimated ${$k(t.value)}.` : `No cases packaged ${when} yet.`;
+    st = [[int(statsBy(set, 'def').length), `defendants in cases packaged ${when}`], [t ? $k(histFor(t.key).avg) : '–', t ? `average fee on ${esc(t.key)}, all history` : ''], [pct(t ? histFor(t.key).win : null), t ? `win rate on ${esc(t.key)}, all history` : '']];
   } else if (view === 'sources') {
-    const ss = sourceStats(set).sort((a, b) => b.fees - a.fees), t = ss[0], tot = sum(ss, 'fees'), signed = sum(ss, 'signed');
-    const topSigned = [...ss].sort((a, b) => b.signed - a.signed)[0];
-    h = t && t.fees ? `${G(esc(t.src))} cases brought in ${$k(t.fees)} ${when}, ${pct(t.fees / tot)} of all fees.` : `No fees collected ${when} yet.`;
-    st = [[int(signed), `cases signed ${when}`], [topSigned ? int(topSigned.signed) : '–', topSigned ? `signed from ${esc(topSigned.src)}, the biggest source` : ''], [t ? $k(t.avg) : '–', t ? `average fee on ${esc(t.src)} cases` : '']];
+    const ss = statsBy(set, 'src').sort((a, b) => b.n - a.n), t = ss[0], low = [...ss].filter((x) => x.n >= 5 && x !== t).sort((a, b) => a.cbRate - b.cbRate)[0];
+    h = t ? `${G(esc(t.key))} supplied ${int(t.n)} of ${int(m.n)} cases packaged ${when}.` : `No cases packaged ${when} yet.`;
+    st = [[t ? pct(t.cbRate) : '–', t ? `chargeback rate on ${esc(t.key)} cases` : ''], [low ? pct(low.cbRate) : '–', low ? `lowest chargeback rate: ${esc(low.key)}` : ''], [t ? $k(t.value) : '–', t ? `estimated value of ${esc(t.key)} cases` : '']];
+  } else if (view === 'team') {
+    const ts = statsBy(set, 'member').sort((a, b) => b.n - a.n);
+    h = `${G(int(m.n))} cases packaged ${when}${ts.length ? `, ${ts.map((t) => `${int(t.n)} by ${esc(t.key)}`).join(', ')}` : ''}.`;
+    st = [[pct(m.n ? m.filed / m.n : null), 'of packaged cases filed'], [pct(m.n ? m.drafted / m.n : null), 'have a complaint drafted'], [pct(m.cbRate), 'charged back']];
   } else if (view === 'marketing') {
-    const mm = D.meta_month.filter((x) => inR(x.m, set)), spend = sum(mm, 'spend');
-    const signed = sum(signedIn(set, (x) => x.src === 'Meta'), 'n'), mf = fees(paidIn(set, (x) => x.src === 'Meta'));
-    h = spend ? `${G($k(spend))} on Meta ${when} signed ${int(signed)} case${signed === 1 ? '' : 's'}${signed ? `, ${$k(spend / signed)} per signed case` : ''}.` : `No Meta spend recorded ${when}.`;
+    const spend = sum(D.meta_month.filter((x) => inR(x.m, set)), 'spend'), mc = metrics(C(set, (x) => x.src === 'Meta'));
+    h = spend ? `${G($k(spend))} on Meta ${when} packaged ${int(mc.n)} case${mc.n === 1 ? '' : 's'}${mc.n ? `, ${$k(spend / mc.n)} per packaged case` : ''}.` : `No Meta spend recorded ${when}.`;
     const sdr = scDefStats(set, pset), sd = sum(sdr, 'impressions'), sdp = sdr.some((x) => x.prior != null) ? sum(sdr, (x) => x.prior || 0) : 0;
-    st = [[int(sum(mm, 'leads')), `Meta leads ${when}`], [$k(mf), `fees collected from Meta cases ${when}`], [int(sd), `times Google showed the site for searches naming a defendant, ${esc(scWhen())}${sdp ? ` (${sd >= sdp ? '+' : ''}${Math.round(((sd - sdp) / sdp) * 100)}%)` : ''}`]];
+    st = [[$k(mc.value), 'estimated value of Meta cases'], [pct(mc.cbRate), 'of Meta cases charged back'], [int(sd), `times Google showed the site for searches naming a defendant${sdp ? ` (${sd >= sdp ? '+' : ''}${Math.round(((sd - sdp) / sdp) * 100)}%)` : ''}`]];
   } else if (view === 'intake') {
     const ld = D.leads.filter((x) => inR(x.m, set)), pl = pset ? D.leads.filter((x) => inR(x.m, pset)) : [];
-    const n = sum(ld, 'n'), c = sum(ld, 'cases'), np = sum(pl, 'n');
-    h = `${G(int(n))} leads came in ${when}${vs(n, np, priorLabel, int)}, and ${int(c)} became cases.`;
-    const won = D.open.filter((o) => o.group === 'Won, not collected'), lit = D.open.filter((o) => o.group === 'Litigation');
-    st = [[pct(n ? c / n : null), 'of those leads became cases'], [int(sum(lit, 'n')), 'cases in litigation now'], [$k(fees(won)), `won, not yet collected (${int(sum(won, 'n'))} cases)`]];
+    const n = sum(ld, 'n'), c = sum(ld, 'cases');
+    h = `${G(int(n))} leads came in ${when}${vs(n, sum(pl, 'n'), prior)}, and ${int(c)} became cases.`;
+    st = [[pct(n ? c / n : null), 'of those leads became cases'], [int(m.actN), 'packaged cases still being worked'], [$k(m.wait), `won, waiting on payment (${cases(m.waitN)})`]];
   }
   $('#headline').innerHTML = h;
   $('#hstats').innerHTML = st.filter((x) => x[1]).map(([v, l]) => `<div><div class="v num">${v}</div><div class="l">${l}</div></div>`).join('');
@@ -536,37 +501,36 @@ function hero() {
 function render() {
   hero();
   $('#tabs').innerHTML = Object.entries(VIEWS).map(([k, l]) => `<button role="tab" data-view="${k}" aria-selected="${k === view}">${l}</button>`).join('');
-  $('#view').innerHTML = { overview: renderOverview, defendants: renderDefendants, sources: renderSources, marketing: renderMarketing, intake: renderIntake }[view]();
+  $('#view').innerHTML = { overview: renderOverview, defendants: renderDefendants, sources: renderSources, team: renderTeam, marketing: renderMarketing, intake: renderIntake }[view]();
 }
 function start() {
   $('#gate').hidden = true; $('#gate').style.display = 'none'; $('#app').hidden = false;
-  const gen = new Date(D.generated_at);
-  $('#fresh').textContent = 'Updated ' + gen.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  $('#fresh').textContent = 'Updated ' + new Date(D.generated_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   $('#hlogo').src = $('#gate img').src;
-  const q = D.quality;
-  $('#foot').innerHTML = `Data from Zoho CRM (cases and leads), Meta ad accounts, Google Search Console and Google Analytics. Refreshed automatically.
+  const q = D.quality, s = q.sheet || {};
+  $('#foot').innerHTML = `Cases come from the JCL Tracker (the ${YEAR()} monthly packaged-case tabs). Stages and dollars come from each case in Zoho CRM. Marketing from Meta, Google Search Console and Google Analytics. Refreshed automatically every 2 hours.
     <details><summary>What each number means</summary><dl>
-      <dt>Fees</dt><dd>${esc(D.fee_label)}${D.fee_share !== 1 ? ` × ${D.fee_share}` : ''}, from the Attorney's Fees field on each case.</dd>
-      <dt>Settlement</dt><dd>What the defendant paid, Defendant 1–4 settlement amounts combined.</dd>
-      <dt>Client payout</dt><dd>What went to the client, from the Client Payout field.</dd>
-      <dt>Costs and other</dt><dd>Settlement minus fees minus client payout, when positive.</dd>
-      <dt>Debt waived</dt><dd>Debt forgiven for clients. Real value, but not cash and never counted as fees.</dd>
-      <dt>Collected</dt><dd>Cases in the Settled Paid stage, dated by Settlement Paid Date.</dd>
-      <dt>Won, not collected</dt><dd>Cases in Settled Unpaid or Settlement Agreement.</dd>
-      <dt>Win rate</dt><dd>Paid cases ÷ (paid + dismissed), all history.</dd>
-      <dt>Signed</dt><dd>Dated by Retainer Signed Date, else intake date. Cases imported in Aug–Oct 2024 without a signing date are left out of monthly signing counts.</dd>
+      <dt>Packaged</dt><dd>A case listed on a ${YEAR()} monthly tab of the tracker, counted in that tab's month.</dd>
+      <dt>Charged back</dt><dd>A tracker row highlighted red.</dd>
+      <dt>Filed</dt><dd>Marked Filed on the monthly tab or the All-Time tab.</dd>
+      <dt>Fees</dt><dd>${esc(D.fee_label)}${D.fee_share !== 1 ? ` × ${D.fee_share}` : ''}, from the Attorney's Fees field on the matching Zoho case.</dd>
+      <dt>Collected</dt><dd>The Zoho case is in Settled Paid.</dd>
+      <dt>Won, waiting on payment</dt><dd>The Zoho case is in Settled Unpaid or Settlement Agreement.</dd>
+      <dt>Estimated value</dt><dd>Fees collected + fees won and waiting + each open case × its defendant's historical win rate × historical average fee, from all past Zoho cases. An estimate, not a promise.</dd>
+      <dt>Source</dt><dd>As recorded in the tracker's Source column.</dd>
+      <dt>Team member</dt><dd>The letter next to each case in the tracker.</dd>
     </dl></details>
-    <details><summary>Data checks</summary><p>${int(q.paid)} paid cases. ${int(q.paid_no_fee)} have no fee entered and count as $0. ${int(q.paid_no_date)} have no paid date and use the date the stage changed. ${int(q.reconcile_ok)} of ${int(q.reconcile_n)} cases with all three amounts match exactly (settlement = fees + client payout).${q.windsor_errors?.length ? ' Some marketing data did not load on the last refresh: ' + esc(q.windsor_errors.join('; ')) : ''}</p></details>`;
+    <details><summary>Data checks</summary><p>${int(s.rows)} packaged cases read from ${int((s.tabs || []).length)} tracker tabs. ${int(s.matched)} matched to a Zoho case by name${s.rows - s.matched ? `; ${int(s.rows - s.matched)} did not match and show as "Not found in Zoho" with no dollars` : ''}. ${int(s.red)} charged back.${q.windsor_errors?.length ? ' Some marketing data did not load on the last refresh: ' + esc(q.windsor_errors.join('; ')) : ''}</p></details>`;
   render();
 }
 document.addEventListener('click', (e) => {
   const t = e.target.closest('[data-view],[data-range],[data-sort],[data-def],[data-src],#defAll'); if (!t) return;
-  if (t.dataset.view) { view = t.dataset.view; render(); window.scrollTo({ top: 0 }); }
+  if (t.dataset.view) { view = t.dataset.view; defShowAll = false; defSort = 'value'; render(); window.scrollTo({ top: 0 }); }
   else if (t.dataset.range) { range = t.dataset.range; render(); }
   else if (t.dataset.sort) { defSort = t.dataset.sort; render(); }
   else if (t.id === 'defAll') { defShowAll = !defShowAll; render(); }
-  else if (t.dataset.def) defDrawer(t.dataset.def);
-  else if (t.dataset.src) srcDrawer(t.dataset.src);
+  else if (t.dataset.def) drawer(t.dataset.def, 'def', 'Defendant');
+  else if (t.dataset.src) drawer(t.dataset.src, 'src', 'Source');
 });
 </script>
 </body>
