@@ -68,7 +68,7 @@ for (let mi = 0; mi <= nowM; mi++) {
     d.Stage = pick(age > 5 ? [['Settled Paid', 30], ['Settled Unpaid', 10], ['Filed', 30], ['Case Dismissed', 10], ['Demand Sent', 20]] : age > 2 ? [['Settled Paid', 8], ['Settled Unpaid', 10], ['Filed', 45], ['Demand Sent', 25], ['Case Dismissed', 5]] : [['Filed', 30], ['Demand Sent', 30], ['Drafted Demand', 25], ['Case Packaged - Needs Review', 15]]);
     if (['Settled Paid', 'Settled Unpaid'].includes(d.Stage) && !d.Gaurds_Law_Attorney_s_Fees) { d.Gaurds_Law_Attorney_s_Fees = 4000 + Math.round(rnd() * 5000); d.Settlement_Amount = d.Gaurds_Law_Attorney_s_Fees + 800; d.Client_Payout = 800; }
     if (d.Stage === 'Settled Paid') d.Summons_Executed = iso(addDays(new Date(Date.UTC(2026, mi, 10)), 60 + Math.floor(rnd() * 90)));
-    const unmatched = rnd() < 0.05;
+    const unmatched = rnd() < 0.05; if (rnd() < 0.15) d.Settlement_Amount_EXP = 1500;
     sheetRows.push({ name: unmatched ? `Nomatch Person${k} v. Somebody` : d.Deal_Name.replace('Sample', 'Q. Sample'), member: rnd() < 0.55 ? 'A' : 'K',
       date: iso(new Date(Date.UTC(2026, mi, 1 + Math.floor(rnd() * 27)))), m: `2026-${String(mi + 1).padStart(2, '0')}`, source: pick(srcs2),
       drafted: rnd() < 0.8 ? '9/2' : '', filing: '', red: rnd() < 0.09, isDrafted: rnd() < 0.8 });

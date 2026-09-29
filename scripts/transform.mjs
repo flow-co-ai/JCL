@@ -5,6 +5,7 @@ const month = (s) => (s ? String(s).slice(0, 7) : null);
 const day = (s) => (s ? new Date(String(s).slice(0, 10) + 'T12:00:00Z') : null);
 const daysBetween = (a, b) => (a && b ? Math.round((b - a) / 86400000) : null);
 
+export const WONSTAGES = ['Settled Paid', 'Settled Unpaid', 'Settlement Agreement'];
 export const STAGE_GROUP = {
   'Follow-Up': 'Signing', 'Retainer Not Signed': 'Signing', 'Retainer Signed': 'Signing',
   'Case Packaged - Needs Review': 'Signing', 'Dispute Sent': 'Signing',
@@ -91,27 +92,49 @@ export function transform(raw, cfg) {
   const sheetSrc = (s) => sheetMap[norm(s)] || (s && s !== 'Not recorded' ? s : 'Not recorded');
   const team = cfg.team || {};
   const matchCase = buildMatcher(raw.deals);
-  const cohort = new Map(), unmatched = [];
+  const cohort = new Map(), unmatched = [], usedDeal = new Map(), caseList = [];
   const sq = { rows: 0, matched: 0, red: 0, dateOnly: 0, tabs: raw.sheet?.tabs || [], key: raw.sheet?.key || [] };
   for (const r of raw.sheet?.rows || []) {
     sq.rows++; if (r.red) sq.red++; if (r.dateOnly) sq.dateOnly++;
-    const d = matchCase(r.name); if (d) sq.matched++; else unmatched.push(r.name);
+    const hit = matchCase(r.name); let d = hit.deal;
+    // One Zoho case is priced once: a second tracker row pointing at the same Zoho case gets no dollars.
+    const dup = d && usedDeal.has(d.id); if (d && !dup) usedDeal.set(d.id, r.name);
+    if (d) sq.matched++; else unmatched.push(r.name);
+    if (dup) sq.dup = (sq.dup || 0) + 1;
+    if (hit.how === 'initials') sq.loose = (sq.loose || 0) + 1;
     const rawDef = d?.Account_Name || (r.name.split(/\s+v\.?\s+/i)[1] || '').trim();
     const def = d ? display[defendantKey(d.Account_Name, aliases)] : (rawDef || '(not set)');
     const type = d?.Case_Type && d.Case_Type !== '-None-' ? d.Case_Type : r.stype || 'Not set';
     const stage = d?.Stage || null;
     const grp = r.red ? 'Charged back' : !d ? 'Not found in Zoho' : STAGE_GROUP[stage] || 'Other';
-    const settle = d ? n(d.Settlement_Amount) + n(d.Settlement_Amount_EXP) + n(d.Settlement_Amount_EQF) + n(d.Settlement_Amount_TU) : 0;
-    const fee = d ? n(d.Gaurds_Law_Attorney_s_Fees) * share : 0, payout = d ? n(d.Client_Payout) : 0;
+    const priced = d && !dup;
+    const s4 = d ? [n(d.Settlement_Amount), n(d.Settlement_Amount_EXP), n(d.Settlement_Amount_EQF), n(d.Settlement_Amount_TU)] : [0, 0, 0, 0];
+    const settle = priced ? s4.reduce((a, b) => a + b, 0) : 0;
+    const fee = priced ? n(d.Gaurds_Law_Attorney_s_Fees) * share : 0, payout = priced ? n(d.Client_Payout) : 0;
     const paidDate = stage === 'Settled Paid' ? (d.Summons_Executed || d.Stage_Modified_Time) : null;
     const days = paidDate && r.date ? daysBetween(day(r.date), day(paidDate)) : null;
     const since = d && grp === 'Won, not collected' ? (d.Settled_in_Principle || d.Stage_Modified_Time) : null;
-    const k = [r.m, sheetSrc(r.source), team[r.member] || r.member, def, type, grp, stage, r.isFiled, r.isPresuit, r.filingStatus, r.isDrafted, month(paidDate)].join('|');
+    const k = [r.m, sheetSrc(r.source), team[r.member] || r.member, def, type, grp, stage, r.isFiled, r.isPresuit, r.filingStatus, r.isDrafted, month(paidDate), dup].join('|');
     const x = acc(cohort, k, () => ({ m: r.m, src: sheetSrc(r.source), member: team[r.member] || r.member, def, type, group: grp, stage,
-      filed: !!r.isFiled, presuit: !!r.isPresuit, filing: r.filingStatus || (r.isFiled ? 'Filed' : r.isPresuit ? 'Pre-suit demand out' : 'Not yet filed'), drafted: !!r.isDrafted, pm: month(paidDate), n: 0, settle: 0, fees: 0, payout: 0, days_sum: 0, days_n: 0, age_sum: 0 }));
+      filed: !!r.isFiled, presuit: !!r.isPresuit, filing: r.filingStatus || (r.isFiled ? 'Filed' : r.isPresuit ? 'Pre-suit demand out' : 'Not yet filed'), drafted: !!r.isDrafted, dup: !!dup, pm: month(paidDate), n: 0, settle: 0, fees: 0, payout: 0, days_sum: 0, days_n: 0, age_sum: 0 }));
     x.n++; x.settle += settle; x.fees += fee; x.payout += payout;
     if (days != null && days >= 0) { x.days_sum += days; x.days_n++; }
     if (since) x.age_sum += Math.max(0, daysBetween(day(since), new Date()) || 0);
+    // Case-level audit row (shown only inside the encrypted page).
+    const flags = [];
+    if (!d) flags.push('Not found in Zoho');
+    if (dup) flags.push(`Same Zoho case as "${usedDeal.get(d.id)}"`);
+    if (hit.how === 'initials') flags.push('Loose name match');
+    if (d && s4.filter((v) => v > 0).length > 1) flags.push('Several defendants settled');
+    if (d && WONSTAGES.includes(stage) && !n(d.Gaurds_Law_Attorney_s_Fees)) flags.push('Won, no fee entered');
+    if (d && !WONSTAGES.includes(stage) && (n(d.Gaurds_Law_Attorney_s_Fees) || s4.some((v) => v > 0))) flags.push('Amounts entered, case not won');
+    if (d && settle && fee && payout && Math.abs(settle - fee / (share || 1) - payout) > 5) flags.push("Settlement ≠ fees + payout");
+    if (r.isFiled && d && ['Drafted Demand', 'Demand Sent', 'Active Negotiations', 'Failed Demand'].includes(stage)) flags.push('Tracker says filed, Zoho says demand');
+    if (!r.isFiled && d && ['Filed', 'Complaint Drafted'].includes(stage)) flags.push('Zoho says filed, tracker does not');
+    caseList.push({ m: r.m, name: r.name, member: team[r.member] || r.member, src: sheetSrc(r.source), filing: r.filingStatus, filingText: r.filing,
+      red: !!r.red, zoho: d?.Deal_Name || null, how: hit.how, stage, def1: d?.Account_Name || null, s: s4, settle: s4.reduce((a, b) => a + b, 0),
+      fees: d ? n(d.Gaurds_Law_Attorney_s_Fees) * share : 0, payout: d ? n(d.Client_Payout) : 0, paid: paidDate ? String(paidDate).slice(0, 10) : null,
+      zfiled: d?.Summons_Filed || null, zstatus: d?.Case_Status || null, dup: !!dup, flags });
   }
   // Other tracker tabs, aggregated (no names).
   const sh = raw.sheet || {};
@@ -206,7 +229,7 @@ export function transform(raw, cfg) {
     generated_at: new Date().toISOString(),
     firm: cfg.firm_name, fee_label: cfg.fee_label, fee_share: share,
     defendants: Object.fromEntries(Object.values(display).map((d) => [d, defType[d] || 'Not set'])),
-    year: cfg.sheet?.year || null, cohort: vals(cohort), tracker, hist, unmatched_count: unmatched.length,
+    year: cfg.sheet?.year || null, cohort: vals(cohort), tracker, cases: caseList, hist, unmatched_count: unmatched.length,
     paid: vals(paid), signed: vals(signed), lost: vals(lost), open: vals(open),
     leads: vals(leads), lead_status_90: vals(status90),
     meta_month: vals(metaM), meta_campaigns_90: vals(camp).sort((a, b) => b.spend - a.spend),

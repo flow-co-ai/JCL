@@ -258,7 +258,7 @@ function histFor(def) {
 function metrics(rows) {
   const by = (g) => rows.filter((r) => (Array.isArray(g) ? g.includes(r.group) : r.group === g));
   const n = sum(rows, 'n'), cb = sum(by('Charged back'), 'n');
-  const col = by('Collected'), wait = by('Won, not collected'), act = rows.filter((r) => ACTIVE.includes(r.group) && r.stage !== 'Failed Demand');
+  const col = by('Collected'), wait = by('Won, not collected'), act = rows.filter((r) => ACTIVE.includes(r.group) && r.stage !== 'Failed Demand' && !r.dup);
   const est = sum(act, (r) => { const h = histFor(r.def); return r.n * h.win * h.avg; });
   return { n, cb, cbRate: n ? cb / n : null, filed: sum(rows.filter((r) => r.filed), 'n'), presuit: sum(rows.filter((r) => r.presuit), 'n'), presuitOut: sum(rows.filter((r) => r.filing === 'Pre-suit demand out'), 'n'), aaa: sum(rows.filter((r) => r.filing === 'Filed with AAA'), 'n'), notYet: sum(rows.filter((r) => r.filing === 'Not yet filed' && r.group !== 'Charged back'), 'n'), drafted: sum(rows.filter((r) => r.drafted), 'n'),
     won: sum(by(WON), 'n'), colN: sum(col, 'n'), col: fees(col), waitN: sum(wait, 'n'), wait: fees(wait), actN: sum(act, 'n'), est,
@@ -276,7 +276,7 @@ function costFor(src, set) {
 }
 
 /* ---------- views ---------- */
-const VIEWS = { overview: 'Overview', defendants: 'Defendants', sources: 'Case sources', team: 'Team', marketing: 'Marketing', intake: 'Intake & pipeline' };
+const VIEWS = { overview: 'Overview', defendants: 'Defendants', sources: 'Case sources', team: 'Team', marketing: 'Marketing', intake: 'Intake & pipeline', cases: 'Cases' };
 let view = 'overview';
 function rangeCtl() { return `<div class="seg" role="group" aria-label="Date range">${Object.keys(RANGES).map((k) => `<button data-range="${k}" aria-pressed="${k === range}">${RANGES[k].label}</button>`).join('')}</div>`; }
 function head(title) { return `<div class="bar"><h2>${esc(title)}</h2>${rangeCtl()}</div>`; }
@@ -314,7 +314,7 @@ function renderOverview() {
   const brief = [];
   if (m.n) brief.push(`${pct(m.presuit / m.n)} went out as pre-suit demands (${int(m.presuitOut)} still waiting on a response), ${pct(m.filed / m.n)} are filed, and ${pct(m.cbRate)} were charged back.`);
   const gl = goalFor(set); if (gl) brief.push(`Packaging goal for ${esc(gl.label)}: ${int(gl.goal)}. Packaged ${int(gl.actual)} (${pct(gl.actual / gl.goal)}).`);
-  if (top[0]) brief.push(`${esc(top[0].key)} is the most valuable defendant in this book: ${int(top[0].n)} cases worth an estimated ${$k(top[0].value)}.`);
+  if (top[0]) brief.push(`${esc(top[0].key)} leads this book with ${cases(top[0].n)}: ${$k(top[0].col)} collected, ${$k(top[0].wait)} won and waiting, ${$k(top[0].est)} projected on the open ones.`);
   if (src[0]) brief.push(`${esc(src[0].key)} supplied the most cases (${int(src[0].n)}), with a ${pct(src[0].cbRate)} chargeback rate.`);
   if (m.waitN) brief.push(`${int(m.waitN)} cases are won and waiting on payment, worth ${$k(m.wait)}.`);
   const byGroup = GROUP_ORDER.map((g) => [g, sum(rows.filter((r) => r.group === g), 'n'), fees(rows.filter((r) => r.group === g))]).filter((x) => x[1]);
@@ -326,7 +326,7 @@ function renderOverview() {
     <div class="kpi"><div class="l">Charged back</div><div class="v num">${int(m.cb)}</div><div class="d">${pct(m.cbRate)} of packaged</div></div>
     <div class="kpi"><div class="l">Fees collected</div><div class="v num">${$k(m.col)}</div><div class="d">${int(m.colN)} cases paid</div></div>
     <div class="kpi"><div class="l">Won, waiting on payment</div><div class="v num">${$k(m.wait)}</div><div class="d">${int(m.waitN)} cases</div></div>
-    <div class="kpi"><div class="l">Estimated value</div><div class="v num">${$k(m.value)}</div><div class="d">collected + waiting + open cases at history's odds</div></div>
+    <div class="kpi"><div class="l">Projected value <span class="tag">estimate</span></div><div class="v num">${$k(m.value)}</div><div class="d">collected + waiting + open cases at history's odds</div></div>
   </div>
   <div class="panel"><h3>Cases packaged by month, and where they stand now</h3><p class="hint">${YEAR()} tracker cases, by the month they were packaged, colored by their stage in Zoho today.</p>${statusChart(D.cohort.filter((r) => inYear(r.m)), monthsChart())}</div>
   <div class="grid two">
@@ -350,7 +350,7 @@ function sortableTable(rows, cols, rowAttr, first) {
 const COLS = {
   n: ['n', 'Packaged', (r) => int(r.n)], presuit: ['presuit', 'Pre-suit', (r) => int(r.presuit)], filed: ['filed', 'Filed', (r) => int(r.filed)], cb: ['cbRate', 'Charged back', (r) => r.cb ? `${int(r.cb)} <span class="sm">${pct(r.cbRate)}</span>` : '–'],
   won: ['won', 'Won', (r) => r.won || '–'], col: ['col', 'Collected', (r) => (r.col ? $k(r.col) : '–')], wait: ['wait', 'Waiting', (r) => (r.wait ? $k(r.wait) : '–')],
-  est: ['est', 'Est. open value', (r) => (r.est ? $k(r.est) : '–')], value: ['value', 'Est. total value', (r) => (r.value ? $k(r.value) : '–')],
+  est: ['est', 'Est. open value', (r) => (r.est ? $k(r.est) : '–')], value: ['value', 'Projected total', (r) => (r.value ? $k(r.value) : '–')],
 };
 function renderDefendants() {
   const set = RANGES[range].months();
@@ -359,7 +359,7 @@ function renderDefendants() {
   const cols = [COLS.n, COLS.presuit, COLS.filed, COLS.cb, COLS.won, COLS.col, COLS.wait, COLS.value,
     ['histAvg', 'Avg fee, history', (r) => (r.histPaid ? $k(r.histAvg) : '–')], ['histWin', 'Win rate, history', (r) => (r.histPaid ? pct(r.histWin) : '–')]];
   return head('Defendants') + `<div class="panel"><h3>Value per company sued</h3>
-    <p class="hint">Cases packaged ${esc(rangeNote())}. Estimated total value = fees collected + fees won and waiting + open cases × that defendant's historical win rate × average fee (from all past Zoho cases). Click a row for detail.</p>
+    <p class="hint">Cases packaged ${esc(rangeNote())}. Projected total = fees collected + fees won and waiting + open cases × that defendant's historical win rate × average fee (an estimate). Each Zoho case is counted once, and settlements from all defendants on a case are included. Click a row for detail.</p>
     ${sortableTable(rows, cols, 'data-def', 'Defendant')}</div>`;
 }
 function renderSources() {
@@ -472,6 +472,66 @@ function trackerPanels(set) {
   </div>`;
 }
 
+/* ---------- cases (audit) ---------- */
+let caseQ = '', caseF = 'all';
+const CASE_FILTERS = { all: 'All cases', flagged: 'Any flag', 'Not found in Zoho': 'Not found in Zoho', same: 'Same Zoho case twice', 'Several defendants settled': 'Several defendants settled', 'Won, no fee entered': 'Won, no fee entered', 'Amounts entered, case not won': 'Amounts entered, case not won', 'Settlement ≠ fees + payout': 'Settlement ≠ fees + payout', mismatch: 'Tracker and Zoho disagree on filing', 'Loose name match': 'Loose name match', red: 'Charged back' };
+function caseRows() {
+  const set = RANGES[range].months(), q = caseQ.toLowerCase();
+  return (D.cases || []).filter((c) => inR(c.m, set)).filter((c) => {
+    if (caseF === 'flagged' && !c.flags.length) return false;
+    if (caseF === 'same' && !c.dup) return false;
+    if (caseF === 'mismatch' && !c.flags.some((f) => /disagree|says/.test(f))) return false;
+    if (caseF === 'red' && !c.red) return false;
+    if (!['all', 'flagged', 'same', 'mismatch', 'red'].includes(caseF) && !c.flags.includes(caseF)) return false;
+    return !q || [c.name, c.zoho, c.def1, c.src, c.member, c.stage, c.filing, c.filingText].join(' ').toLowerCase().includes(q);
+  }).sort((a, b) => b.m.localeCompare(a.m) || a.name.localeCompare(b.name));
+}
+const money = (v) => (v ? $f(v) : '–');
+function caseBody() {
+  const rows = caseRows();
+  const won = rows.filter((c) => !c.dup && ['Settled Paid', 'Settled Unpaid', 'Settlement Agreement'].includes(c.stage));
+  $('#caseCount').textContent = `${int(rows.length)} cases shown · on won cases: settlements ${$f(sum(won, 'settle'))}, fees ${$f(sum(won, 'fees'))}, client payouts ${$f(sum(won, 'payout'))}`;
+  $('#caseBody').innerHTML = rows.map((c) => `<tr style="cursor:default${c.red ? ';background:#fbeeec' : ''}">
+    <td>${esc(c.name)}<span class="sm">${mLabel(c.m, true)} · ${esc(c.member)} · ${esc(c.src)}</span></td>
+    <td style="text-align:left;white-space:normal;min-width:150px">${esc(c.filing || '')}<span class="sm">${esc(c.filingText || '')}</span></td>
+    <td style="text-align:left;white-space:normal;min-width:150px">${c.zoho ? esc(c.stage || '') : '<span class="down">Not in Zoho</span>'}<span class="sm">${esc(c.zoho || '')}${c.how === 'initials' ? ' (loose match)' : ''}</span></td>
+    <td style="text-align:left;white-space:normal">${esc(c.def1 || '–')}</td>
+    ${c.s.map((v) => `<td class="num">${money(v)}</td>`).join('')}
+    <td class="num"><strong>${money(c.settle)}</strong></td><td class="num">${money(c.fees)}</td><td class="num">${money(c.payout)}</td><td class="num">${esc(c.paid || '–')}</td>
+    <td style="text-align:left;white-space:normal;min-width:180px">${c.flags.map((f) => `<span class="tag" style="margin:1px 2px">${esc(f)}</span>`).join('')}</td></tr>`).join('') || '<tr><td colspan="14" class="empty">No cases match.</td></tr>';
+}
+function renderCases() {
+  const all = (D.cases || []).filter((c) => inR(c.m, RANGES[range].months()));
+  const cnt = (f) => all.filter(f).length;
+  return head('Cases') + `<div class="panel"><h3>Every packaged case, with its Zoho numbers</h3>
+    <p class="hint">One row per case on the ${YEAR()} tracker tabs, packaged ${esc(rangeNote())}. Settlement shows each defendant's amount from Zoho (Defendant 1–4). Rows that point at a Zoho case already used by another row show the numbers but are not added into any total. Red rows are chargebacks.</p>
+    <div class="grid kpis" style="margin-bottom:14px">
+      <div class="kpi"><div class="l">Not found in Zoho</div><div class="v num">${cnt((c) => !c.zoho)}</div></div>
+      <div class="kpi"><div class="l">Same Zoho case twice</div><div class="v num">${cnt((c) => c.dup)}</div></div>
+      <div class="kpi"><div class="l">Several defendants settled</div><div class="v num">${cnt((c) => c.flags.includes('Several defendants settled'))}</div></div>
+      <div class="kpi"><div class="l">Filing disagrees with Zoho</div><div class="v num">${cnt((c) => c.flags.some((f) => /says/.test(f)))}</div></div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      <input id="caseQ" type="search" placeholder="Search client, defendant, source…" value="${esc(caseQ)}" style="flex:1;min-width:200px;padding:9px 12px;border:1px solid var(--line);border-radius:3px;font:inherit">
+      <select id="caseF" style="padding:9px 10px;border:1px solid var(--line);border-radius:3px;font:inherit;background:#fff">${Object.entries(CASE_FILTERS).map(([k, l]) => `<option value="${esc(k)}"${k === caseF ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>
+      <button class="more" id="csv" style="margin:0">Download CSV</button>
+    </div>
+    <p class="hint" id="caseCount"></p>
+    <div class="tw"><table><thead><tr style="cursor:default"><th>Case (tracker)</th><th style="text-align:left">Filing (tracker)</th><th style="text-align:left">Stage (Zoho)</th><th style="text-align:left">Defendant 1</th><th>Def 1 $</th><th>Def 2 $</th><th>Def 3 $</th><th>Def 4 $</th><th>Settlement</th><th>Fees</th><th>Client payout</th><th>Paid</th><th style="text-align:left">Flags</th></tr></thead>
+    <tbody id="caseBody"></tbody></table></div></div>`;
+}
+function bindCases() {
+  caseBody();
+  $('#caseQ').addEventListener('input', (e) => { caseQ = e.target.value; caseBody(); });
+  $('#caseF').addEventListener('change', (e) => { caseF = e.target.value; caseBody(); });
+}
+function exportCases() {
+  const cols = ['Month', 'Case (tracker)', 'Team', 'Source', 'Filing status', 'Filing text', 'Charged back', 'Zoho case', 'Match', 'Zoho stage', 'Defendant 1', 'Def 1 settlement', 'Def 2 settlement', 'Def 3 settlement', 'Def 4 settlement', 'Settlement total', 'Fees', 'Client payout', 'Paid date', 'Flags'];
+  const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = [cols.map(q).join(','), ...caseRows().map((c) => [c.m, c.name, c.member, c.src, c.filing, c.filingText, c.red ? 'yes' : '', c.zoho, c.how, c.stage, c.def1, ...c.s, c.settle, c.fees, c.payout, c.paid, c.flags.join('; ')].map(q).join(','))];
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' })); a.download = `jcl-cases-${range}.csv`; a.click();
+}
+
 /* ---------- drawers ---------- */
 function openDrawer(html) { $('#dbody').innerHTML = html; $('#drawer').classList.add('open'); $('#drawer').setAttribute('aria-hidden', 'false'); $('#drawer .x').focus(); }
 function closeDrawer() { $('#drawer').classList.remove('open'); $('#drawer').setAttribute('aria-hidden', 'true'); }
@@ -510,16 +570,16 @@ function hero() {
   let h = '', st = [];
   if (view === 'overview') {
     const gl = goalFor(set);
-    h = `${G(int(m.n))} cases packaged ${when}${gl ? ` against a goal of ${int(gl.goal)}` : vs(m.n, pm?.n, prior)}, worth an estimated ${$k(m.value)}.`;
+    h = `${G(int(m.n))} cases packaged ${when}${gl ? ` against a goal of ${int(gl.goal)}` : vs(m.n, pm?.n, prior)}.`;
     st = [[$k(m.col), `fees collected, ${cases(m.colN)}`], [$k(m.wait), `won, waiting on payment (${cases(m.waitN)})`], [pct(m.cbRate), `charged back (${cases(m.cb)})`]];
   } else if (view === 'defendants') {
     const t = statsBy(set, 'def').sort((a, b) => b.value - a.value)[0];
-    h = t ? `${G(esc(t.key))} is the biggest defendant ${when}: ${cases(t.n)} worth an estimated ${$k(t.value)}.` : `No cases packaged ${when} yet.`;
+    h = t ? `${G(esc(t.key))} is the biggest defendant ${when}: ${cases(t.n)}, ${$k(t.col)} collected and ${$k(t.wait)} won and waiting.` : `No cases packaged ${when} yet.`;
     st = [[int(statsBy(set, 'def').length), `defendants in cases packaged ${when}`], [t ? $k(histFor(t.key).avg) : '–', t ? `average fee on ${esc(t.key)}, all history` : ''], [pct(t ? histFor(t.key).win : null), t ? `win rate on ${esc(t.key)}, all history` : '']];
   } else if (view === 'sources') {
     const ss = statsBy(set, 'src').sort((a, b) => b.n - a.n), t = ss[0], low = [...ss].filter((x) => x.n >= 5 && x !== t).sort((a, b) => a.cbRate - b.cbRate)[0];
     h = t ? `${G(esc(t.key))} supplied ${int(t.n)} of ${int(m.n)} cases packaged ${when}.` : `No cases packaged ${when} yet.`;
-    st = [[t ? pct(t.cbRate) : '–', t ? `chargeback rate on ${esc(t.key)} cases` : ''], [low ? pct(low.cbRate) : '–', low ? `lowest chargeback rate: ${esc(low.key)}` : ''], [t ? $k(t.value) : '–', t ? `estimated value of ${esc(t.key)} cases` : '']];
+    st = [[t ? pct(t.cbRate) : '–', t ? `chargeback rate on ${esc(t.key)} cases` : ''], [low ? pct(low.cbRate) : '–', low ? `lowest chargeback rate: ${esc(low.key)}` : ''], [t ? $k(t.col + t.wait) : '–', t ? `collected or won on ${esc(t.key)} cases` : '']];
   } else if (view === 'team') {
     const ts = statsBy(set, 'member').sort((a, b) => b.n - a.n);
     h = `${G(int(m.n))} cases packaged ${when}${ts.length ? `, ${ts.map((t) => `${int(t.n)} by ${esc(t.key)}`).join(', ')}` : ''}.`;
@@ -528,7 +588,12 @@ function hero() {
     const spend = sum(D.meta_month.filter((x) => inR(x.m, set)), 'spend'), mc = metrics(C(set, (x) => x.src === 'Meta'));
     h = spend ? `${G($k(spend))} on Meta ${when} packaged ${int(mc.n)} case${mc.n === 1 ? '' : 's'}${mc.n ? `, ${$k(spend / mc.n)} per packaged case` : ''}.` : `No Meta spend recorded ${when}.`;
     const sdr = scDefStats(set, pset), sd = sum(sdr, 'impressions'), sdp = sdr.some((x) => x.prior != null) ? sum(sdr, (x) => x.prior || 0) : 0;
-    st = [[$k(mc.value), 'estimated value of Meta cases'], [pct(mc.cbRate), 'of Meta cases charged back'], [int(sd), `times Google showed the site for searches naming a defendant${sdp ? ` (${sd >= sdp ? '+' : ''}${Math.round(((sd - sdp) / sdp) * 100)}%)` : ''}`]];
+    st = [[$k(mc.col + mc.wait), 'collected or won on Meta cases'], [pct(mc.cbRate), 'of Meta cases charged back'], [int(sd), `times Google showed the site for searches naming a defendant${sdp ? ` (${sd >= sdp ? '+' : ''}${Math.round(((sd - sdp) / sdp) * 100)}%)` : ''}`]];
+  } else if (view === 'cases') {
+    const all = (D.cases || []).filter((c) => inR(c.m, set)), fl = all.filter((c) => c.flags.length);
+    h = `${G(int(all.length))} cases packaged ${when}, ${int(fl.length)} with something to check.`;
+    const won = all.filter((c) => !c.dup && ['Settled Paid', 'Settled Unpaid', 'Settlement Agreement'].includes(c.stage));
+    st = [[int(all.filter((c) => c.zoho).length), 'found in Zoho'], [$k(sum(won, 'settle')), 'settlements on won cases, all defendants'], [$k(sum(won, 'fees')), 'attorney fees on won cases']];
   } else if (view === 'intake') {
     const ld = D.leads.filter((x) => inR(x.m, set)), pl = pset ? D.leads.filter((x) => inR(x.m, pset)) : [];
     const n = sum(ld, 'n'), c = sum(ld, 'cases');
@@ -543,7 +608,8 @@ function hero() {
 function render() {
   hero();
   $('#tabs').innerHTML = Object.entries(VIEWS).map(([k, l]) => `<button role="tab" data-view="${k}" aria-selected="${k === view}">${l}</button>`).join('');
-  $('#view').innerHTML = { overview: renderOverview, defendants: renderDefendants, sources: renderSources, team: renderTeam, marketing: renderMarketing, intake: renderIntake }[view]();
+  $('#view').innerHTML = { overview: renderOverview, defendants: renderDefendants, sources: renderSources, team: renderTeam, marketing: renderMarketing, intake: renderIntake, cases: renderCases }[view]();
+  if (view === 'cases') bindCases();
 }
 function start() {
   $('#gate').hidden = true; $('#gate').style.display = 'none'; $('#app').hidden = false;
@@ -560,7 +626,7 @@ function start() {
       <dt>Fees</dt><dd>${esc(D.fee_label)}${D.fee_share !== 1 ? ` × ${D.fee_share}` : ''}, from the Attorney's Fees field on the matching Zoho case.</dd>
       <dt>Collected</dt><dd>The Zoho case is in Settled Paid.</dd>
       <dt>Won, waiting on payment</dt><dd>The Zoho case is in Settled Unpaid or Settlement Agreement.</dd>
-      <dt>Estimated value</dt><dd>Fees collected + fees won and waiting + each open case × its defendant's historical win rate × historical average fee, from all past Zoho cases. An estimate, not a promise.</dd>
+      <dt>Projected value</dt><dd>Fees collected + fees won and waiting + each open case × its defendant's historical win rate × historical average fee, from all past Zoho cases. An estimate, not a promise.</dd>
       <dt>Source</dt><dd>As recorded in the tracker's Source column.</dd>
       <dt>Team member</dt><dd>The letter next to each case in the tracker.</dd>
     </dl></details>
@@ -568,7 +634,8 @@ function start() {
   render();
 }
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-view],[data-range],[data-sort],[data-def],[data-src],#defAll'); if (!t) return;
+  const t = e.target.closest('[data-view],[data-range],[data-sort],[data-def],[data-src],#defAll,#csv'); if (!t) return;
+  if (t.id === 'csv') { exportCases(); return; }
   if (t.dataset.view) { view = t.dataset.view; defShowAll = false; defSort = 'value'; render(); window.scrollTo({ top: 0 }); }
   else if (t.dataset.range) { range = t.dataset.range; render(); }
   else if (t.dataset.sort) { defSort = t.dataset.sort; render(); }

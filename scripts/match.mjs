@@ -2,7 +2,7 @@
 const STOP = /\b(llc|inc|lp|l p|pllc|ltd|corp|corporation|co|company|the|dba|group|services|solutions|financial|et al)\b/g;
 export const norm = (s) => String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[.,'’"()]/g, ' ').replace(/\s+/g, ' ').trim();
 function split(s) {
-  const n = norm(s), parts = n.split(/\s+(?:v|vs)\s+/);
+  const n = norm(s), parts = n.split(/\s+(?:v|vs)\s+|\s+-\s+/);
   return { full: n, client: parts[0] || n, def: parts.slice(1).join(' ') };
 }
 const clientKey = (c) => { const t = c.split(' ').filter((w) => w.length > 1 && w !== 'and'); return t.length ? `${t[0]} ${t.at(-1)}` : c; };
@@ -24,8 +24,12 @@ export function buildMatcher(deals) {
     const hit = list.filter((d) => dw && (d._defWord === dw || d._accWord === dw));
     return hit.length === 1 ? hit[0] : hit.length > 1 ? hit.sort((a, b) => String(b.Created_Time).localeCompare(String(a.Created_Time)))[0] : null;
   };
+  // Returns { deal, how }: how = 'exact' (same case name), 'client' (same client, defendant checked), 'initials' (first + last name only).
   return (name) => {
     const s = split(name), dw = defWord(s.def);
-    return pick(byFull.get(s.full), dw) || pick(byClient.get(s.client), dw) || pick(byKey.get(clientKey(s.client)), dw) || null;
+    let d = pick(byFull.get(s.full), dw); if (d) return { deal: d, how: 'exact' };
+    d = pick(byClient.get(s.client), dw); if (d) return { deal: d, how: 'client' };
+    d = pick(byKey.get(clientKey(s.client)), dw); if (d) return { deal: d, how: 'initials' };
+    return { deal: null, how: 'none' };
   };
 }
