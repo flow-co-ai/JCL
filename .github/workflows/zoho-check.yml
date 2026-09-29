@@ -5,8 +5,8 @@ on:
       script:
         description: Which check to run
         type: choice
-        options: [money, fields]
-        default: money
+        options: [sheet, money, fields]
+        default: sheet
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -17,8 +17,13 @@ jobs:
           node-version: 20
       - name: Check Zoho (read-only)
         run: |
-          if [ "${{ inputs.script }}" = "money" ]; then node scripts/zoho-money.mjs; else node scripts/zoho-check.mjs; fi
+          case "${{ inputs.script }}" in
+            sheet) node scripts/sheet-check.mjs ;;
+            money) node scripts/zoho-money.mjs ;;
+            *) node scripts/zoho-check.mjs ;;
+          esac
         env:
           ZOHO_CLIENT_ID: ${{ secrets.ZOHO_CLIENT_ID }}
           ZOHO_CLIENT_SECRET: ${{ secrets.ZOHO_CLIENT_SECRET }}
           ZOHO_REFRESH_TOKEN: ${{ secrets.ZOHO_REFRESH_TOKEN }}
+          GOOGLE_SA_JSON: ${{ secrets.GOOGLE_SA_JSON }}
