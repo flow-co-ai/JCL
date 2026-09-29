@@ -92,13 +92,13 @@ export function transform(raw, cfg) {
   const team = cfg.team || {};
   const matchCase = buildMatcher(raw.deals);
   const cohort = new Map(), unmatched = [];
-  const sq = { rows: 0, matched: 0, red: 0, tabs: raw.sheet?.tabs || [] };
+  const sq = { rows: 0, matched: 0, red: 0, dateOnly: 0, tabs: raw.sheet?.tabs || [], key: raw.sheet?.key || [] };
   for (const r of raw.sheet?.rows || []) {
-    sq.rows++; if (r.red) sq.red++;
+    sq.rows++; if (r.red) sq.red++; if (r.dateOnly) sq.dateOnly++;
     const d = matchCase(r.name); if (d) sq.matched++; else unmatched.push(r.name);
     const rawDef = d?.Account_Name || (r.name.split(/\s+v\.?\s+/i)[1] || '').trim();
     const def = d ? display[defendantKey(d.Account_Name, aliases)] : (rawDef || '(not set)');
-    const type = d?.Case_Type && d.Case_Type !== '-None-' ? d.Case_Type : 'Not set';
+    const type = d?.Case_Type && d.Case_Type !== '-None-' ? d.Case_Type : r.stype || 'Not set';
     const stage = d?.Stage || null;
     const grp = r.red ? 'Charged back' : !d ? 'Not found in Zoho' : STAGE_GROUP[stage] || 'Other';
     const settle = d ? n(d.Settlement_Amount) + n(d.Settlement_Amount_EXP) + n(d.Settlement_Amount_EQF) + n(d.Settlement_Amount_TU) : 0;
@@ -106,13 +106,23 @@ export function transform(raw, cfg) {
     const paidDate = stage === 'Settled Paid' ? (d.Summons_Executed || d.Stage_Modified_Time) : null;
     const days = paidDate && r.date ? daysBetween(day(r.date), day(paidDate)) : null;
     const since = d && grp === 'Won, not collected' ? (d.Settled_in_Principle || d.Stage_Modified_Time) : null;
-    const k = [r.m, sheetSrc(r.source), team[r.member] || r.member, def, type, grp, stage, r.isFiled, r.isPresuit, r.isDrafted, month(paidDate)].join('|');
+    const k = [r.m, sheetSrc(r.source), team[r.member] || r.member, def, type, grp, stage, r.isFiled, r.isPresuit, r.filingStatus, r.isDrafted, month(paidDate)].join('|');
     const x = acc(cohort, k, () => ({ m: r.m, src: sheetSrc(r.source), member: team[r.member] || r.member, def, type, group: grp, stage,
-      filed: !!r.isFiled, presuit: !!r.isPresuit, drafted: !!r.isDrafted, pm: month(paidDate), n: 0, settle: 0, fees: 0, payout: 0, days_sum: 0, days_n: 0, age_sum: 0 }));
+      filed: !!r.isFiled, presuit: !!r.isPresuit, filing: r.filingStatus || (r.isFiled ? 'Filed' : r.isPresuit ? 'Pre-suit demand out' : 'Not yet filed'), drafted: !!r.isDrafted, pm: month(paidDate), n: 0, settle: 0, fees: 0, payout: 0, days_sum: 0, days_n: 0, age_sum: 0 }));
     x.n++; x.settle += settle; x.fees += fee; x.payout += payout;
     if (days != null && days >= 0) { x.days_sum += days; x.days_n++; }
     if (since) x.age_sum += Math.max(0, daysBetween(day(since), new Date()) || 0);
   }
+  // Other tracker tabs, aggregated (no names).
+  const sh = raw.sheet || {};
+  const byM = (list, f) => { const o = {}; for (const x of list || []) { const k = f(x); o[k] = (o[k] || 0) + 1; } return o; };
+  const goalsM = {}; for (const g of sh.goals || []) { const x = (goalsM[g.m] ||= { goal: 0, weeks: 0 }); x.goal += g.goal; x.weeks++; }
+  const tracker = {
+    goals: goalsM,
+    conditional: Object.entries(byM(sh.conditional, (x) => `${x.m}|${team[x.member] || x.member}`)).map(([k, n]) => { const [m, member] = k.split('|'); return { m, member, n }; }),
+    referred: Object.entries(byM(sh.referred, (x) => `${x.m}|${sheetSrc(x.source)}|${x.paid}`)).map(([k, n]) => { const [m, src, paid] = k.split('|'); return { m, src, paid: paid === 'true', n }; }),
+    prep: sh.prep || null, arb: sh.arb || null,
+  };
   // History per defendant (all Zoho cases) for expected value: paid, dismissed, fees.
   const hist = {};
   for (const r of paid.values()) { const h = (hist[r.def] ||= { paid: 0, lost: 0, fees: 0 }); h.paid += r.n; h.fees += r.fees; }
@@ -196,7 +206,7 @@ export function transform(raw, cfg) {
     generated_at: new Date().toISOString(),
     firm: cfg.firm_name, fee_label: cfg.fee_label, fee_share: share,
     defendants: Object.fromEntries(Object.values(display).map((d) => [d, defType[d] || 'Not set'])),
-    year: cfg.sheet?.year || null, cohort: vals(cohort), hist, unmatched_count: unmatched.length,
+    year: cfg.sheet?.year || null, cohort: vals(cohort), tracker, hist, unmatched_count: unmatched.length,
     paid: vals(paid), signed: vals(signed), lost: vals(lost), open: vals(open),
     leads: vals(leads), lead_status_90: vals(status90),
     meta_month: vals(metaM), meta_campaigns_90: vals(camp).sort((a, b) => b.spend - a.spend),

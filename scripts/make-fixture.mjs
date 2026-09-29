@@ -72,9 +72,9 @@ for (let mi = 0; mi <= nowM; mi++) {
     sheetRows.push({ name: unmatched ? `Nomatch Person${k} v. Somebody` : d.Deal_Name.replace('Sample', 'Q. Sample'), member: rnd() < 0.55 ? 'A' : 'K',
       date: iso(new Date(Date.UTC(2026, mi, 1 + Math.floor(rnd() * 27)))), m: `2026-${String(mi + 1).padStart(2, '0')}`, source: pick(srcs2),
       drafted: rnd() < 0.8 ? '9/2' : '', filing: '', red: rnd() < 0.09, isDrafted: rnd() < 0.8 });
-    const z = sheetRows.at(-1), u = rnd(); z.filing = u < 0.35 ? 'Filed' : u < 0.8 ? 'Pre-Suit sent on 5/12' : ''; z.isPresuit = /pre-suit/i.test(z.filing); z.isFiled = z.filing === 'Filed';
+    const z = sheetRows.at(-1), u = rnd(); z.filing = u < 0.35 ? 'Filed' : u < 0.8 ? 'Pre-Suit sent on 5/12' : ''; z.isPresuit = /pre-suit/i.test(z.filing); z.isFiled = z.filing === 'Filed' || rnd() < 0.3 && z.isPresuit; z.filingStatus = z.isFiled ? (z.isPresuit ? 'Filed with AAA' : 'Filed') : z.isPresuit ? 'Pre-suit demand out' : 'Not yet filed';
   }
 }
 fs.mkdirSync('sample', { recursive: true });
-fs.writeFileSync('sample/fixture.json', JSON.stringify({ deals, leads, sheet: { rows: sheetRows, tabs: ['January \'26'] }, windsor: { meta, ga4, sc_daily: sc, sc_q_last, sc_q_prior, sc_q_months, sc_pages, errors: [] } }));
+fs.writeFileSync('sample/fixture.json', JSON.stringify({ deals, leads, sheet: { rows: sheetRows, tabs: ['January \'26'], goals: [{ m: '2026-08', goal: 33 }, { m: '2026-09', goal: 40 }], conditional: [{ m: '2026-09', member: 'A' }, { m: '2026-09', member: 'K' }], referred: [{ m: '2026-07', source: 'SEO', member: 'K', paid: true }, { m: '2026-08', source: 'AR Employment', member: 'A', paid: false }], prep: { cases: 7, contract: 4, ledger: 1, retainer: 0, docs: 4, ready: 2 }, arb: { open: 32, closed: 17, order: 30, drafted: 17, issued: 22, notice: 15, received: 11 } }, windsor: { meta, ga4, sc_daily: sc, sc_q_last, sc_q_prior, sc_q_months, sc_pages, errors: [] } }));
 console.log('Wrote sample/fixture.json');

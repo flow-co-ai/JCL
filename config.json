@@ -124,8 +124,9 @@
     "year": 2026
   },
   "team": {
-    "A": "A",
-    "K": "K"
+    "A": "Andrew",
+    "K": "Kelly",
+    "AK": "Andrew & Kelly"
   },
   "team_help": "Map the letter in column A of the tracker to a name, e.g. {\"A\": \"Andrew\"}.",
   "sheet_source_groups": {
