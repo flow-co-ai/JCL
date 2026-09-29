@@ -106,9 +106,9 @@ export function transform(raw, cfg) {
     const paidDate = stage === 'Settled Paid' ? (d.Summons_Executed || d.Stage_Modified_Time) : null;
     const days = paidDate && r.date ? daysBetween(day(r.date), day(paidDate)) : null;
     const since = d && grp === 'Won, not collected' ? (d.Settled_in_Principle || d.Stage_Modified_Time) : null;
-    const k = [r.m, sheetSrc(r.source), team[r.member] || r.member, def, type, grp, stage, r.isFiled, r.isDrafted, month(paidDate)].join('|');
+    const k = [r.m, sheetSrc(r.source), team[r.member] || r.member, def, type, grp, stage, r.isFiled, r.isPresuit, r.isDrafted, month(paidDate)].join('|');
     const x = acc(cohort, k, () => ({ m: r.m, src: sheetSrc(r.source), member: team[r.member] || r.member, def, type, group: grp, stage,
-      filed: !!r.isFiled, drafted: !!r.isDrafted, pm: month(paidDate), n: 0, settle: 0, fees: 0, payout: 0, days_sum: 0, days_n: 0, age_sum: 0 }));
+      filed: !!r.isFiled, presuit: !!r.isPresuit, drafted: !!r.isDrafted, pm: month(paidDate), n: 0, settle: 0, fees: 0, payout: 0, days_sum: 0, days_n: 0, age_sum: 0 }));
     x.n++; x.settle += settle; x.fees += fee; x.payout += payout;
     if (days != null && days >= 0) { x.days_sum += days; x.days_n++; }
     if (since) x.age_sum += Math.max(0, daysBetween(day(since), new Date()) || 0);

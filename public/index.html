@@ -260,7 +260,7 @@ function metrics(rows) {
   const n = sum(rows, 'n'), cb = sum(by('Charged back'), 'n');
   const col = by('Collected'), wait = by('Won, not collected'), act = rows.filter((r) => ACTIVE.includes(r.group) && r.stage !== 'Failed Demand');
   const est = sum(act, (r) => { const h = histFor(r.def); return r.n * h.win * h.avg; });
-  return { n, cb, cbRate: n ? cb / n : null, filed: sum(rows.filter((r) => r.filed), 'n'), drafted: sum(rows.filter((r) => r.drafted), 'n'),
+  return { n, cb, cbRate: n ? cb / n : null, filed: sum(rows.filter((r) => r.filed), 'n'), presuit: sum(rows.filter((r) => r.presuit), 'n'), drafted: sum(rows.filter((r) => r.drafted), 'n'),
     won: sum(by(WON), 'n'), colN: sum(col, 'n'), col: fees(col), waitN: sum(wait, 'n'), wait: fees(wait), actN: sum(act, 'n'), est,
     value: fees(col) + fees(wait) + est, lost: sum(by('Dismissed'), 'n'), unmatched: sum(by('Not found in Zoho'), 'n'),
     days: sum(col, 'days_n') ? sum(col, 'days_sum') / sum(col, 'days_n') : null };
@@ -290,7 +290,7 @@ function statusChart(rows, months) {
   return bars({ months, stacks, fmt: int }) + legend(stacks.map((s) => [s.color, s.label]));
 }
 function funnel(m) {
-  const steps = [['Packaged', m.n], ['Complaint drafted', m.drafted], ['Filed', m.filed], ['Won', m.won], ['Collected', m.colN]];
+  const steps = [['Packaged', m.n], ['Complaint drafted', m.drafted], ['Pre-suit demand sent', m.presuit], ['Filed in court', m.filed], ['Won', m.won], ['Collected', m.colN]];
   const max = Math.max(1, m.n);
   return `<table><tbody>${steps.map(([l, v]) => `<tr style="cursor:default"><td class="barcell">${l}<span class="b" style="width:${(v / max) * 100}%"></span></td><td class="num">${int(v)}</td><td class="num">${pct(m.n ? v / m.n : null)}</td></tr>`).join('')}
     <tr style="cursor:default"><td>Charged back</td><td class="num down">${int(m.cb)}</td><td class="num">${pct(m.cbRate)}</td></tr></tbody></table>`;
@@ -301,7 +301,7 @@ function renderOverview() {
   const top = statsBy(set, 'def').sort((a, b) => b.value - a.value);
   const src = statsBy(set, 'src').sort((a, b) => b.n - a.n);
   const brief = [];
-  if (m.n) brief.push(`${pct(m.n ? m.filed / m.n : 0)} of these cases are filed and ${pct(m.cbRate)} were charged back.`);
+  if (m.n) brief.push(`${pct(m.presuit / m.n)} went out as pre-suit demands, ${pct(m.filed / m.n)} were filed in court, and ${pct(m.cbRate)} were charged back.`);
   if (top[0]) brief.push(`${esc(top[0].key)} is the most valuable defendant in this book: ${int(top[0].n)} cases worth an estimated ${$k(top[0].value)}.`);
   if (src[0]) brief.push(`${esc(src[0].key)} supplied the most cases (${int(src[0].n)}), with a ${pct(src[0].cbRate)} chargeback rate.`);
   if (m.waitN) brief.push(`${int(m.waitN)} cases are won and waiting on payment, worth ${$k(m.wait)}.`);
@@ -309,7 +309,8 @@ function renderOverview() {
   return head('Overview') + `
   <div class="grid kpis">
     <div class="kpi"><div class="l">Cases packaged</div><div class="v num">${int(m.n)}</div><div class="d">${esc(rangeNote())}</div></div>
-    <div class="kpi"><div class="l">Filed</div><div class="v num">${int(m.filed)}</div><div class="d">${pct(m.n ? m.filed / m.n : null)} of packaged</div></div>
+    <div class="kpi"><div class="l">Pre-suit demands</div><div class="v num">${int(m.presuit)}</div><div class="d">${pct(m.n ? m.presuit / m.n : null)} of packaged</div></div>
+    <div class="kpi"><div class="l">Filed in court</div><div class="v num">${int(m.filed)}</div><div class="d">${pct(m.n ? m.filed / m.n : null)} of packaged</div></div>
     <div class="kpi"><div class="l">Charged back</div><div class="v num">${int(m.cb)}</div><div class="d">${pct(m.cbRate)} of packaged</div></div>
     <div class="kpi"><div class="l">Fees collected</div><div class="v num">${$k(m.col)}</div><div class="d">${int(m.colN)} cases paid</div></div>
     <div class="kpi"><div class="l">Won, waiting on payment</div><div class="v num">${$k(m.wait)}</div><div class="d">${int(m.waitN)} cases</div></div>
@@ -334,7 +335,7 @@ function sortableTable(rows, cols, rowAttr, first) {
     ${rows.length > 15 ? `<button class="more" id="defAll">${defShowAll ? 'Show top 15' : `Show all ${rows.length}`}</button>` : ''}`;
 }
 const COLS = {
-  n: ['n', 'Packaged', (r) => int(r.n)], filed: ['filed', 'Filed', (r) => int(r.filed)], cb: ['cbRate', 'Charged back', (r) => r.cb ? `${int(r.cb)} <span class="sm">${pct(r.cbRate)}</span>` : '–'],
+  n: ['n', 'Packaged', (r) => int(r.n)], presuit: ['presuit', 'Pre-suit', (r) => int(r.presuit)], filed: ['filed', 'Filed', (r) => int(r.filed)], cb: ['cbRate', 'Charged back', (r) => r.cb ? `${int(r.cb)} <span class="sm">${pct(r.cbRate)}</span>` : '–'],
   won: ['won', 'Won', (r) => r.won || '–'], col: ['col', 'Collected', (r) => (r.col ? $k(r.col) : '–')], wait: ['wait', 'Waiting', (r) => (r.wait ? $k(r.wait) : '–')],
   est: ['est', 'Est. open value', (r) => (r.est ? $k(r.est) : '–')], value: ['value', 'Est. total value', (r) => (r.value ? $k(r.value) : '–')],
 };
@@ -342,7 +343,7 @@ function renderDefendants() {
   const set = RANGES[range].months();
   const rows = statsBy(set, 'def').map((r) => { const h = histFor(r.key); return { ...r, tag: D.defendants[r.key] || '', histAvg: h.avg, histWin: h.win, histPaid: h.paid }; })
     .sort((a, b) => (b[defSort] ?? -1) - (a[defSort] ?? -1));
-  const cols = [COLS.n, COLS.filed, COLS.cb, COLS.won, COLS.col, COLS.wait, COLS.value,
+  const cols = [COLS.n, COLS.presuit, COLS.filed, COLS.cb, COLS.won, COLS.col, COLS.wait, COLS.value,
     ['histAvg', 'Avg fee, history', (r) => (r.histPaid ? $k(r.histAvg) : '–')], ['histWin', 'Win rate, history', (r) => (r.histPaid ? pct(r.histWin) : '–')]];
   return head('Defendants') + `<div class="panel"><h3>Value per company sued</h3>
     <p class="hint">Cases packaged ${esc(rangeNote())}. Estimated total value = fees collected + fees won and waiting + open cases × that defendant's historical win rate × average fee (from all past Zoho cases). Click a row for detail.</p>
@@ -351,7 +352,7 @@ function renderDefendants() {
 function renderSources() {
   const set = RANGES[range].months();
   const rows = statsBy(set, 'src').map((r) => { const cost = costFor(r.key, set); return { ...r, cost, cpp: cost && r.n ? cost / r.n : null, roi: cost ? r.value / cost : null }; }).sort((a, b) => (b[defSort] ?? -1) - (a[defSort] ?? -1));
-  const cols = [COLS.n, COLS.filed, COLS.cb, COLS.won, COLS.col, COLS.value,
+  const cols = [COLS.n, COLS.presuit, COLS.filed, COLS.cb, COLS.won, COLS.col, COLS.value,
     ['cost', 'Cost', (r) => (r.cost ? $k(r.cost) : '<span class="est">not recorded</span>')], ['cpp', 'Cost per packaged case', (r) => (r.cpp ? $k(r.cpp) : '–')], ['roi', 'Est. value per $1', (r) => (r.roi ? '$' + r.roi.toFixed(1) : '–')]];
   const months = monthsChart(), g = group(D.cohort.filter((r) => inYear(r.m)), (r) => r.m);
   const names = rows.map((r) => r.key).slice(0, 7);
@@ -367,8 +368,8 @@ function renderTeam() {
   const months = monthsChart(), g = group(D.cohort.filter((r) => inYear(r.m)), (r) => r.m);
   const stacks = rows.map((r, i) => ({ label: r.key, color: COLORS[i], values: months.map((m) => sum((g[m] || []).filter((x) => x.member === r.key), 'n')) }));
   return head('Team') + `<div class="panel"><h3>Cases packaged by team member</h3><p class="hint">From the letter next to each case in the tracker, for cases packaged ${esc(rangeNote())}.</p>
-    <div class="tw"><table><thead><tr><th>Team member</th><th>Packaged</th><th>Complaint drafted</th><th>Filed</th><th>Charged back</th><th>Won</th><th>Est. total value</th></tr></thead><tbody>
-    ${rows.map((r) => `<tr style="cursor:default"><td>${esc(r.key)}</td><td class="num">${int(r.n)}</td><td class="num">${int(r.drafted)}</td><td class="num">${int(r.filed)} <span class="sm">${pct(r.n ? r.filed / r.n : null)}</span></td><td class="num">${int(r.cb)} <span class="sm">${pct(r.cbRate)}</span></td><td class="num">${int(r.won)}</td><td class="num est">${$k(r.value)}</td></tr>`).join('')}</tbody></table></div></div>
+    <div class="tw"><table><thead><tr><th>Team member</th><th>Packaged</th><th>Complaint drafted</th><th>Pre-suit</th><th>Filed</th><th>Charged back</th><th>Won</th><th>Est. total value</th></tr></thead><tbody>
+    ${rows.map((r) => `<tr style="cursor:default"><td>${esc(r.key)}</td><td class="num">${int(r.n)}</td><td class="num">${int(r.drafted)}</td><td class="num">${int(r.presuit)}</td><td class="num">${int(r.filed)} <span class="sm">${pct(r.n ? r.filed / r.n : null)}</span></td><td class="num">${int(r.cb)} <span class="sm">${pct(r.cbRate)}</span></td><td class="num">${int(r.won)}</td><td class="num est">${$k(r.value)}</td></tr>`).join('')}</tbody></table></div></div>
     <div class="panel"><h3>Packaged per month</h3><p class="hint">${YEAR()}</p>${bars({ months, stacks, fmt: int })}${legend(stacks.map((s) => [s.color, s.label]))}</div>`;
 }
 
@@ -481,7 +482,7 @@ function hero() {
   } else if (view === 'team') {
     const ts = statsBy(set, 'member').sort((a, b) => b.n - a.n);
     h = `${G(int(m.n))} cases packaged ${when}${ts.length ? `, ${ts.map((t) => `${int(t.n)} by ${esc(t.key)}`).join(', ')}` : ''}.`;
-    st = [[pct(m.n ? m.filed / m.n : null), 'of packaged cases filed'], [pct(m.n ? m.drafted / m.n : null), 'have a complaint drafted'], [pct(m.cbRate), 'charged back']];
+    st = [[pct(m.n ? m.presuit / m.n : null), 'sent as pre-suit demands'], [pct(m.n ? m.filed / m.n : null), 'filed in court'], [pct(m.cbRate), 'charged back']];
   } else if (view === 'marketing') {
     const spend = sum(D.meta_month.filter((x) => inR(x.m, set)), 'spend'), mc = metrics(C(set, (x) => x.src === 'Meta'));
     h = spend ? `${G($k(spend))} on Meta ${when} packaged ${int(mc.n)} case${mc.n === 1 ? '' : 's'}${mc.n ? `, ${$k(spend / mc.n)} per packaged case` : ''}.` : `No Meta spend recorded ${when}.`;
@@ -512,7 +513,8 @@ function start() {
     <details><summary>What each number means</summary><dl>
       <dt>Packaged</dt><dd>A case listed on a ${YEAR()} monthly tab of the tracker, counted in that tab's month.</dd>
       <dt>Charged back</dt><dd>A tracker row highlighted red.</dd>
-      <dt>Filed</dt><dd>Marked Filed on the monthly tab or the All-Time tab.</dd>
+      <dt>Pre-suit demand</dt><dd>The monthly tab's filing column says a pre-suit demand was sent.</dd>
+      <dt>Filed in court</dt><dd>The monthly tab's filing column says Filed. Pre-suit demands are never counted as filed.</dd>
       <dt>Fees</dt><dd>${esc(D.fee_label)}${D.fee_share !== 1 ? ` × ${D.fee_share}` : ''}, from the Attorney's Fees field on the matching Zoho case.</dd>
       <dt>Collected</dt><dd>The Zoho case is in Settled Paid.</dd>
       <dt>Won, waiting on payment</dt><dd>The Zoho case is in Settled Unpaid or Settlement Agreement.</dd>

@@ -72,7 +72,9 @@ export async function sheetPull(cfg) {
   for (const r of out) {
     const k = r.name.toLowerCase();
     if (redNames.has(k)) r.red = true;
-    r.isFiled = /^filed/i.test(r.filing) || allFiled.has(k);
+    // Filed only when the monthly tab says so. Pre-suit demands are counted separately, never as filed.
+    r.isPresuit = /pre-?\s?suit|demand/i.test(r.filing);
+    r.isFiled = !r.isPresuit && /^filed/i.test(r.filing);
     r.isDrafted = !!r.drafted || allDrafted.has(k);
   }
   return { rows: out, tabs: monthTabs.map((x) => x.t), allTab: allTab || null, redInAllTab: redNames.size };

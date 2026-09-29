@@ -71,7 +71,8 @@ for (let mi = 0; mi <= nowM; mi++) {
     const unmatched = rnd() < 0.05;
     sheetRows.push({ name: unmatched ? `Nomatch Person${k} v. Somebody` : d.Deal_Name.replace('Sample', 'Q. Sample'), member: rnd() < 0.55 ? 'A' : 'K',
       date: iso(new Date(Date.UTC(2026, mi, 1 + Math.floor(rnd() * 27)))), m: `2026-${String(mi + 1).padStart(2, '0')}`, source: pick(srcs2),
-      drafted: rnd() < 0.8 ? '9/2' : '', filing: rnd() < 0.55 ? 'Filed' : '', red: rnd() < 0.09, isFiled: rnd() < 0.55, isDrafted: rnd() < 0.8 });
+      drafted: rnd() < 0.8 ? '9/2' : '', filing: '', red: rnd() < 0.09, isDrafted: rnd() < 0.8 });
+    const z = sheetRows.at(-1), u = rnd(); z.filing = u < 0.35 ? 'Filed' : u < 0.8 ? 'Pre-Suit sent on 5/12' : ''; z.isPresuit = /pre-suit/i.test(z.filing); z.isFiled = z.filing === 'Filed';
   }
 }
 fs.mkdirSync('sample', { recursive: true });
