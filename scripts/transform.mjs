@@ -120,21 +120,11 @@ export function transform(raw, cfg) {
     x.n++; x.settle += settle; x.fees += fee; x.payout += payout;
     if (days != null && days >= 0) { x.days_sum += days; x.days_n++; }
     if (since) x.age_sum += Math.max(0, daysBetween(day(since), new Date()) || 0);
-    // Case-level audit row (shown only inside the encrypted page).
-    const flags = [];
-    if (!d) flags.push('Not found in Zoho');
-    if (dup) flags.push(`Same Zoho case as "${usedDeal.get(d.id)}"`);
-    if (hit.how === 'initials') flags.push('Loose name match');
-    if (d && s4.filter((v) => v > 0).length > 1) flags.push('Several defendants settled');
-    if (d && WONSTAGES.includes(stage) && !n(d.Gaurds_Law_Attorney_s_Fees)) flags.push('Won, no fee entered');
-    if (d && !WONSTAGES.includes(stage) && (n(d.Gaurds_Law_Attorney_s_Fees) || s4.some((v) => v > 0))) flags.push('Amounts entered, case not won');
-    if (d && settle && fee && payout && Math.abs(settle - fee / (share || 1) - payout) > 5) flags.push("Settlement ≠ fees + payout");
-    if (r.isFiled && d && ['Drafted Demand', 'Demand Sent', 'Active Negotiations', 'Failed Demand'].includes(stage)) flags.push('Tracker says filed, Zoho says demand');
-    if (!r.isFiled && d && ['Filed', 'Complaint Drafted'].includes(stage)) flags.push('Zoho says filed, tracker does not');
+    // Case-level row for the drill-down (inside the encrypted page only).
     caseList.push({ m: r.m, name: r.name, member: team[r.member] || r.member, src: sheetSrc(r.source), filing: r.filingStatus, filingText: r.filing,
       red: !!r.red, zoho: d?.Deal_Name || null, how: hit.how, stage, def1: d?.Account_Name || null, s: s4, settle: s4.reduce((a, b) => a + b, 0),
       fees: d ? n(d.Gaurds_Law_Attorney_s_Fees) * share : 0, payout: d ? n(d.Client_Payout) : 0, paid: paidDate ? String(paidDate).slice(0, 10) : null,
-      zfiled: d?.Summons_Filed || null, zstatus: d?.Case_Status || null, dup: !!dup, flags });
+      dup: !!dup, defKey: def });
   }
   // Other tracker tabs, aggregated (no names).
   const sh = raw.sheet || {};
