@@ -1,8 +1,13 @@
 name: Refresh dashboard
 on:
   schedule:
-    - cron: "15 */6 * * *"
+    - cron: "10 */2 * * *"
   workflow_dispatch:
+    inputs:
+      show_unmatched:
+        description: List tracker cases that did not match Zoho (log only)
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths: ["public/**", "scripts/**", "config.json", ".github/workflows/refresh.yml"]
@@ -25,6 +30,8 @@ jobs:
           ZOHO_REFRESH_TOKEN: ${{ secrets.ZOHO_REFRESH_TOKEN }}
           WINDSOR_API_KEY: ${{ secrets.WINDSOR_API_KEY }}
           DASHBOARD_KEY: ${{ secrets.DASHBOARD_KEY }}
+          GOOGLE_SA_JSON: ${{ secrets.GOOGLE_SA_JSON }}
+          SHOW_UNMATCHED: ${{ inputs.show_unmatched && '1' || '' }}
       - name: Deploy to Netlify
         run: npx --yes netlify-cli@17 deploy --prod --dir=public --site "$NETLIFY_SITE_ID" --auth "$NETLIFY_AUTH_TOKEN" --message "refresh $(date -u +%F-%H%M)"
         env:
