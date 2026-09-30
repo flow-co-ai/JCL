@@ -265,6 +265,9 @@ function metrics(rows) {
     value: fees(col) + fees(wait), lost: sum(by('Dismissed'), 'n'), unmatched: sum(by('Not found in Zoho'), 'n'),
     days: sum(col, 'days_n') ? sum(col, 'days_sum') / sum(col, 'days_n') : null };
 }
+const feesPaid = (set) => fees(D.paid.filter((r) => inR(r.m, set)));
+const casesPaid = (set) => sum(D.paid.filter((r) => inR(r.m, set)), 'n');
+function sameLastYear(set) { return set.map((m) => addM(m, -12)); }
 function statsBy(set, key) {
   const g = group(C(set), (r) => r[key]);
   return Object.entries(g).map(([k, rows]) => ({ key: k, ...metrics(rows) }));
@@ -283,6 +286,18 @@ function head(title) { return `<div class="bar"><h2>${esc(title)}</h2>${rangeCtl
 const monthsChart = () => yearMonths();
 const pk = 'packaged';
 
+function yoyPanel() {
+  const y = YEAR(), months = Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, '0')}`);
+  const byM = group(D.paid, (r) => r.m), f = (m) => fees(byM[m] || []);
+  const ytd = months.filter((m) => m <= curM), lastYtd = ytd.map((m) => addM(m, -12));
+  const years = [...new Set(D.paid.map((r) => r.m?.slice(0, 4)).filter((x) => x && x >= '2024' && x <= String(y)))].sort();
+  return `<div class="panel"><h3>Fees collected by month, ${y} against ${y - 1}</h3><p class="hint">All cases, by Settlement Paid Date in Zoho, whatever year the case was packaged. Bars are ${y}; the dashed line is the same month in ${y - 1}.</p>
+    ${bars({ months, stacks: [{ label: `${y}`, color: 'var(--navy)', values: months.map((m) => (m <= curM ? f(m) : 0)) }], ghost: months.map((m) => f(addM(m, -12))) })}
+    <div class="tw" style="margin-top:10px"><table><thead><tr style="cursor:default"><th>Year</th><th>Fees collected</th><th>Cases paid</th><th>Average fee</th></tr></thead><tbody>
+    ${years.map((yr) => { const r = D.paid.filter((x) => x.m?.startsWith(yr) && (yr < String(y) || x.m <= curM)); return `<tr style="cursor:default"><td>${yr}${yr === String(y) ? ' <span class="tag">to date</span>' : ''}</td><td class="num">${$k(fees(r))}</td><td class="num">${int(sum(r, 'n'))}</td><td class="num">${$k(fees(r) / Math.max(1, sum(r, 'n')))}</td></tr>`; }).join('')}
+    <tr style="cursor:default"><td>${y - 1}, same months <span class="tag">Jan–${mLabel(curM)}</span></td><td class="num">${$k(sum(lastYtd, f))}</td><td class="num">${int(sum(D.paid.filter((x) => lastYtd.includes(x.m)), 'n'))}</td><td></td></tr>
+    </tbody></table></div></div>`;
+}
 function goalFor(set) {
   const g = D.tracker?.goals || {}, ms = set.filter((m) => g[m]);
   if (!ms.length || ms.length !== set.length) return null;  // only when every month in the range has a goal
@@ -320,13 +335,14 @@ function renderOverview() {
   const byGroup = GROUP_ORDER.map((g) => [g, sum(rows.filter((r) => r.group === g), 'n'), fees(rows.filter((r) => r.group === g))]).filter((x) => x[1]);
   return head('Overview') + `
   <div class="grid kpis">
+    <div class="kpi"><div class="l">Fees collected, all cases</div><div class="v num">${$k(feesPaid(set))}</div><div class="d">${int(casesPaid(set))} cases paid ${esc(rangeNote())}, any year packaged</div></div>
+    <div class="kpi"><div class="l">Fees collected on ${YEAR()} cases</div><div class="v num">${$k(m.col)}</div><div class="d">${int(m.colN)} of the cases packaged ${esc(rangeNote())}</div></div>
+    <div class="kpi"><div class="l">Won, waiting on payment</div><div class="v num">${$k(m.wait)}</div><div class="d">${int(m.waitN)} cases packaged ${esc(rangeNote())}</div></div>
     <div class="kpi"><div class="l">Cases packaged</div><div class="v num">${int(m.n)}</div><div class="d">${esc(rangeNote())}</div></div>
     <div class="kpi"><div class="l">Pre-suit demands out</div><div class="v num">${int(m.presuitOut)}</div><div class="d">sent, not filed yet · ${int(m.presuit)} sent in all</div></div>
     <div class="kpi"><div class="l">Filed</div><div class="v num">${int(m.filed)}</div><div class="d">${pct(m.n ? m.filed / m.n : null)} of packaged · ${int(m.aaa)} with AAA</div></div>
-    <div class="kpi"><div class="l">Charged back</div><div class="v num">${int(m.cb)}</div><div class="d">${pct(m.cbRate)} of packaged</div></div>
-    <div class="kpi"><div class="l">Fees collected</div><div class="v num">${$k(m.col)}</div><div class="d">${int(m.colN)} cases paid</div></div>
-    <div class="kpi"><div class="l">Won, waiting on payment</div><div class="v num">${$k(m.wait)}</div><div class="d">${int(m.waitN)} cases</div></div>
   </div>
+  ${yoyPanel()}
   <div class="panel"><h3>Cases packaged by month, and where they stand now</h3><p class="hint">${YEAR()} tracker cases, by the month they were packaged, colored by their stage in Zoho today.</p>${statusChart(D.cohort.filter((r) => inYear(r.m)), monthsChart())}</div>
   <div class="grid two">
     <div class="panel"><h3>From packaged to paid</h3><p class="hint">Cases packaged ${esc(rangeNote())}.</p>${funnel(m)}</div>
@@ -486,8 +502,8 @@ function drawer(key, field, title) {
   openDrawer(`<h3>${esc(key)}</h3><p class="hint">${esc(title)} · cases packaged ${esc(rangeNote())}</p>
     <div class="grid kpis" style="margin:14px 0"><div class="kpi"><div class="l">Packaged</div><div class="v num">${int(m.n)}</div></div><div class="kpi"><div class="l">Collected</div><div class="v num">${$k(m.col)}</div></div><div class="kpi"><div class="l">Won, waiting</div><div class="v num">${$k(m.wait)}</div></div></div>
     <h4>By month and stage</h4>${statusChart(D.cohort.filter((r) => inYear(r.m) && r[field] === key), months)}
-    <h4>The cases</h4><p class="hint">Stage from Zoho. For won cases, D1–D4 are each defendant's settlement and the right column is the attorney fee.</p>
-    <table><tbody>${list.map((c) => `<tr style="cursor:default"><td>${esc(c.name)}<span class="sm">${esc(c.stage || 'Not found in Zoho')}${c.red ? ' · charged back' : ''}${c.dup ? ' · same Zoho case as another row, not counted twice' : ''}</span>${amounts(c) ? `<span class="sm">${amounts(c)}</span>` : ''}</td><td class="num">${isWon(c) && c.fees ? $k(c.fees) + '<span class="sm">fees</span>' : '–'}</td></tr>`).join('') || '<tr><td>None</td></tr>'}</tbody></table>`);
+    <h4>The cases</h4><p class="hint">Click a case to open it in Zoho. For won cases, D1–D4 are each defendant's settlement and the right column is the attorney fee.</p>
+    <table><tbody>${list.map((c) => `<tr style="cursor:default"><td>${c.id && D.zoho_link ? `<a href="${esc(D.zoho_link + c.id)}" target="_blank" rel="noopener" style="color:var(--navy)">${esc(c.name)} ↗</a>` : esc(c.name)}<span class="sm">${esc(c.stage || 'Not found in Zoho')}${c.red ? ' · charged back' : ''}${c.dup ? ' · same Zoho case as another row, not counted twice' : ''}</span>${amounts(c) ? `<span class="sm">${amounts(c)}</span>` : ''}</td><td class="num">${isWon(c) && c.fees ? $k(c.fees) + '<span class="sm">fees</span>' : '–'}</td></tr>`).join('') || '<tr><td>None</td></tr>'}</tbody></table>`);
 }
 
 /* ---------- hero ---------- */
@@ -506,9 +522,10 @@ function hero() {
   const m = metrics(C(set)), pm = pset ? metrics(C(pset)) : null;
   let h = '', st = [];
   if (view === 'overview') {
-    const gl = goalFor(set);
-    h = `${G(int(m.n))} cases packaged ${when}${gl ? ` against a goal of ${int(gl.goal)}` : vs(m.n, pm?.n, prior)}.`;
-    st = [[$k(m.col), `fees collected, ${cases(m.colN)}`], [$k(m.wait), `won, waiting on payment (${cases(m.waitN)})`], [pct(m.cbRate), `charged back (${cases(m.cb)})`]];
+    const gl = goalFor(set), fAll = feesPaid(set), fLy = feesPaid(sameLastYear(set));
+    const c = fLy ? Math.round(((fAll - fLy) / fLy) * 100) : null;
+    h = `${G($k(fAll))} in fees collected ${when}${c != null && range !== 'month' ? `, ${c >= 0 ? 'up' : 'down'} ${Math.abs(c)}% on the same period last year` : ''}.`;
+    st = [[int(m.n), `cases packaged${gl ? ` against a goal of ${int(gl.goal)}` : ''}`], [$k(m.col), `collected on ${YEAR()} cases`], [$k(m.wait), `won on ${YEAR()} cases, waiting on payment`]];
   } else if (view === 'defendants') {
     const t = statsBy(set, 'def').sort((a, b) => b.value - a.value)[0];
     h = t ? `${G(esc(t.key))} is the biggest defendant ${when}: ${cases(t.n)}, ${$k(t.col)} collected and ${$k(t.wait)} won and waiting.` : `No cases packaged ${when} yet.`;
@@ -551,16 +568,17 @@ function start() {
     <details><summary>What each number means</summary><dl>
       <dt>Packaged</dt><dd>A case listed on a ${YEAR()} monthly tab of the tracker, counted in that tab's month.</dd>
       <dt>Charged back</dt><dd>A tracker row highlighted red.</dd>
-      <dt>Pre-suit demand out</dt><dd>The tracker's filing column says a pre-suit demand was sent and nothing has been filed after it.</dd>
+      <dt>Pre-suit demand out</dt><dd>A Pre-suit date in Zoho (or, until those are filled in, the tracker's filing column says a demand was sent) and no Filed date yet.</dd>
       <dt>Filed</dt><dd>The filing column says Filed ("Filed AAA" = arbitration with AAA), or shows only a filing date. A pre-suit demand that was later filed counts as filed.</dd>
       <dt>Goal</dt><dd>The weekly goals on each monthly tab, added up.</dd>
       <dt>Fees</dt><dd>${esc(D.fee_label)}${D.fee_share !== 1 ? ` × ${D.fee_share}` : ''}, from the Attorney's Fees field on the matching Zoho case.</dd>
-      <dt>Collected</dt><dd>The Zoho case is in Settled Paid.</dd>
+      <dt>Fees collected, all cases</dt><dd>Every Zoho case with a Settlement Paid Date in the period, whatever year it was packaged.</dd>
+      <dt>Fees collected on 2026 cases</dt><dd>Only cases packaged on the 2026 tracker tabs that have a Settlement Paid Date (or sit in Settled Paid).</dd>
       <dt>Won, waiting on payment</dt><dd>The Zoho case is in Settled Unpaid or Settlement Agreement.</dd>
             <dt>Source</dt><dd>As recorded in the tracker's Source column.</dd>
       <dt>Team member</dt><dd>The letter next to each case in the tracker.</dd>
     </dl></details>
-    <details><summary>Data checks</summary><p>${int(s.rows)} packaged cases read from ${int((s.tabs || []).length)} tracker tabs.${s.dup ? ` ${int(s.dup)} rows point to a Zoho case already counted on another row, so their dollars are counted once.` : ''} ${int(s.matched)} matched to a Zoho case by name${s.rows - s.matched ? `; ${int(s.rows - s.matched)} did not match and show as "Not found in Zoho" with no dollars` : ''}. ${int(s.red)} charged back (red rows).${s.dateOnly ? ` ${int(s.dateOnly)} show only a date in the filing column and are counted as filed on that date.` : ''}${q.windsor_errors?.length ? ' Some marketing data did not load on the last refresh: ' + esc(q.windsor_errors.join('; ')) : ''}</p></details>`;
+    <details><summary>Data checks</summary><p>${int(s.rows)} packaged cases read from ${int((s.tabs || []).length)} tracker tabs.${s.dup ? ` ${int(s.dup)} rows point to a Zoho case already counted on another row, so their dollars are counted once.` : ''} ${int(s.matched)} matched to a Zoho case by name${s.rows - s.matched ? `; ${int(s.rows - s.matched)} did not match and show as "Not found in Zoho" with no dollars` : ''}. ${int(s.red)} charged back (red rows).${q.paid_other_stage ? ` ${int(q.paid_other_stage)} Zoho cases have a Settlement Paid Date but a stage other than Settled Paid; they count as paid.` : ''}${s.dateOnly ? ` ${int(s.dateOnly)} show only a date in the filing column and are counted as filed on that date.` : ''}${q.windsor_errors?.length ? ' Some marketing data did not load on the last refresh: ' + esc(q.windsor_errors.join('; ')) : ''}</p></details>`;
   render();
 }
 document.addEventListener('click', (e) => {

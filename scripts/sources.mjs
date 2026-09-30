@@ -36,7 +36,14 @@ export async function zohoPull(cfg) {
     return out;
   }
 
-  const deals = await all('Deals', ['Deal_Name', 'Stage', 'Account_Name', 'Lead_Source', 'Case_Type', 'Created_Time',
+  // Find the Pre-suit and Filed date fields Andrew added (matched by label, so the API name doesn't matter).
+  const fieldMeta = (await get('settings/fields', { module: 'Deals' }))?.fields || [];
+  const dateField = (re) => fieldMeta.find((f) => ['date', 'datetime'].includes(f.data_type) && re.test(String(f.field_label).trim()))?.api_name || null;
+  const presuitField = dateField(/^pre-?\s?suit/i), filedField = dateField(/^(date\s+)?filed(\s+date)?$/i);
+  console.log(`Zoho fields: pre-suit = ${presuitField || 'not found'}, filed = ${filedField || 'not found'}`);
+  let orgDomain = null;
+  try { const o = await get('org', {}); orgDomain = o?.org?.[0]?.domain_name || null; } catch { /* links are optional */ }
+  const deals = await all('Deals', [...[presuitField, filedField].filter(Boolean), 'Deal_Name', 'Stage', 'Account_Name', 'Lead_Source', 'Case_Type', 'Created_Time',
     'Retainer_Signed_Date', 'Lead_Intake_Date', 'Summons_Filed', 'Case_Status', 'Settled_in_Principle_EXP', 'Settled_in_Principle_EQF', 'Settled_in_Principle_TU', 'Summons_Executed', 'Settled_in_Principle', 'Stage_Modified_Time',
     'Settlement_Amount', 'Settlement_Amount_EXP', 'Settlement_Amount_EQF', 'Settlement_Amount_TU',
     'Gaurds_Law_Attorney_s_Fees', 'Client_Payout', 'Court_fee', 'Debt_Wavier', 'Debt_Waiver_2', 'Debt_Waiver_3']);
@@ -49,7 +56,9 @@ export async function zohoPull(cfg) {
   }
   // Keep only what the transform needs; drop Zoho record ids except for the lead->case link.
   return {
-    deals: deals.map((d) => ({ ...d, Account_Name: d.Account_Name?.name || null })),
+    zohoLink: orgDomain ? `https://crm.zoho.com/crm/${orgDomain}/tab/Potentials/` : null,
+    deals: deals.map((d) => ({ ...d, Account_Name: d.Account_Name?.name || null,
+      _presuit: presuitField ? d[presuitField] || null : null, _filed: filedField ? d[filedField] || null : null })),
     leads: leads.map((l) => ({ Lead_Source: l.Lead_Source, Lead_Status: l.Lead_Status, Created_Time: l.Created_Time,
       Converted: !!l.Converted__s, Deal: l.Converted_Deal?.id || null })),
     dealIds: deals.map((d) => d.id),

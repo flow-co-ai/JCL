@@ -63,10 +63,11 @@ export function transform(raw, cfg) {
     const stage = d.Stage || 'Unknown', group = STAGE_GROUP[stage] || 'Other';
     dealById.set(d.id, { stage, group, fees: fees * share, sm });
 
-    if (stage === 'Settled Paid') {
+    if (stage === 'Settled Paid' || d.Summons_Executed) {
       dq.paid++;
       if (!fees) dq.paid_no_fee++;
       if (!d.Summons_Executed) dq.paid_no_date++;
+      if (d.Summons_Executed && stage !== 'Settled Paid') dq.paid_other_stage = (dq.paid_other_stage || 0) + 1;
       if (settle && fees && payout) { dq.reconcile_n++; if (Math.abs(settle - fees - payout) <= 5) dq.reconcile_ok++; }
       const pDate = d.Summons_Executed || d.Stage_Modified_Time || d.Created_Time;
       const days = daysBetween(sDay, day(pDate));
@@ -106,14 +107,17 @@ export function transform(raw, cfg) {
     const def = d ? display[defendantKey(d.Account_Name, aliases)] : (rawDef || '(not set)');
     const type = d?.Case_Type && d.Case_Type !== '-None-' ? d.Case_Type : r.stype || 'Not set';
     const stage = d?.Stage || null;
-    const grp = r.red ? 'Charged back' : !d ? 'Not found in Zoho' : STAGE_GROUP[stage] || 'Other';
+    const grp = r.red ? 'Charged back' : !d ? 'Not found in Zoho' : d.Summons_Executed ? 'Collected' : STAGE_GROUP[stage] || 'Other';
     const priced = d && !dup;
     const s4 = d ? [n(d.Settlement_Amount), n(d.Settlement_Amount_EXP), n(d.Settlement_Amount_EQF), n(d.Settlement_Amount_TU)] : [0, 0, 0, 0];
     const settle = priced ? s4.reduce((a, b) => a + b, 0) : 0;
     const fee = priced ? n(d.Gaurds_Law_Attorney_s_Fees) * share : 0, payout = priced ? n(d.Client_Payout) : 0;
-    const paidDate = stage === 'Settled Paid' ? (d.Summons_Executed || d.Stage_Modified_Time) : null;
+    const paidDate = d && (d.Summons_Executed || (stage === 'Settled Paid' ? d.Stage_Modified_Time : null)) || null;
     const days = paidDate && r.date ? daysBetween(day(r.date), day(paidDate)) : null;
     const since = d && grp === 'Won, not collected' ? (d.Settled_in_Principle || d.Stage_Modified_Time) : null;
+    const zPre = !!d?._presuit, zFiled = !!d?._filed;
+    r.isPresuit = r.isPresuit || zPre; r.isFiled = r.isFiled || zFiled;
+    if (zFiled) r.filingStatus = /AAA/.test(r.filingStatus || '') ? r.filingStatus : 'Filed'; else if (zPre && !r.isFiled) r.filingStatus = 'Pre-suit demand out';
     const k = [r.m, sheetSrc(r.source), team[r.member] || r.member, def, type, grp, stage, r.isFiled, r.isPresuit, r.filingStatus, r.isDrafted, month(paidDate), dup].join('|');
     const x = acc(cohort, k, () => ({ m: r.m, src: sheetSrc(r.source), member: team[r.member] || r.member, def, type, group: grp, stage,
       filed: !!r.isFiled, presuit: !!r.isPresuit, filing: r.filingStatus || (r.isFiled ? 'Filed' : r.isPresuit ? 'Pre-suit demand out' : 'Not yet filed'), drafted: !!r.isDrafted, dup: !!dup, pm: month(paidDate), n: 0, settle: 0, fees: 0, payout: 0, days_sum: 0, days_n: 0, age_sum: 0 }));
@@ -124,7 +128,7 @@ export function transform(raw, cfg) {
     caseList.push({ m: r.m, name: r.name, member: team[r.member] || r.member, src: sheetSrc(r.source), filing: r.filingStatus, filingText: r.filing,
       red: !!r.red, zoho: d?.Deal_Name || null, how: hit.how, stage, def1: d?.Account_Name || null, s: s4, settle: s4.reduce((a, b) => a + b, 0),
       fees: d ? n(d.Gaurds_Law_Attorney_s_Fees) * share : 0, payout: d ? n(d.Client_Payout) : 0, paid: paidDate ? String(paidDate).slice(0, 10) : null,
-      dup: !!dup, defKey: def });
+      dup: !!dup, defKey: def, id: d?.id || null });
   }
   // Other tracker tabs, aggregated (no names).
   const sh = raw.sheet || {};
@@ -219,6 +223,7 @@ export function transform(raw, cfg) {
     generated_at: new Date().toISOString(),
     firm: cfg.firm_name, fee_label: cfg.fee_label, fee_share: share,
     defendants: Object.fromEntries(Object.values(display).map((d) => [d, defType[d] || 'Not set'])),
+    zoho_link: raw.zohoLink || null,
     year: cfg.sheet?.year || null, cohort: vals(cohort), tracker, cases: caseList, hist, unmatched_count: unmatched.length,
     paid: vals(paid), signed: vals(signed), lost: vals(lost), open: vals(open),
     leads: vals(leads), lead_status_90: vals(status90),
