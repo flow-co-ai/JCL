@@ -410,24 +410,17 @@ function animateNumbers(root = document) {
 }
 function heroChart() {
   const ym = yearMonths(), byPm = group(firm().filter((c) => c.pm), (c) => c.pm);
-  let run = 0; const cum = ym.map((m) => (run += sum(byPm[m] || [], 'fees')));
-  if (!cum.length || !run) return '';
-  const W = 520, H = 170, pl = 6, pr = 58, pt = 16, pb = 22, max = Math.max(1, ...cum);
-  const x = (i) => pl + (ym.length === 1 ? 0 : (i / (ym.length - 1)) * (W - pl - pr)), y = (v) => pt + (H - pt - pb) * (1 - v / max);
-  const pts = cum.map((v, i) => [x(i), y(v)]);
-  const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
-  const area = `${line} L ${x(ym.length - 1)} ${H - pb} L ${x(0)} ${H - pb} Z`;
-  let len = 0; for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-  const last = pts.at(-1);
-  return `<div class="cap"><span>Fees collected, running total ${YEAR()}</span><span><span class="live" style="color:var(--green)">●</span> refreshed every 2 hours</span></div>
-  <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" aria-label="Running total of fees collected in ${YEAR()}">
-    <defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#33bb78" stop-opacity=".45"/><stop offset="1" stop-color="#33bb78" stop-opacity="0"/></linearGradient></defs>
-    ${[0.25, 0.5, 0.75, 1].map((f) => `<line x1="${pl}" x2="${W - pr}" y1="${y(max * f)}" y2="${y(max * f)}" stroke="rgba(255,255,255,.07)"/>`).join('')}
-    <path class="areaf" d="${area}" fill="url(#hg)"/>
-    <path class="draw" style="--len:${Math.ceil(len)}" d="${line}" fill="none" stroke="#33bb78" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-    ${pts.map((p, i) => `<circle class="dot" style="animation-delay:${200 + i * 140}ms;transform-origin:${p[0]}px ${p[1]}px" cx="${p[0]}" cy="${p[1]}" r="${i === pts.length - 1 ? 5 : 2.5}" fill="${i === pts.length - 1 ? '#fff' : '#33bb78'}"><title>${mLabel(ym[i], true)}: ${$k(cum[i])} so far</title></circle>`).join('')}
-    <text x="${last[0] + 10}" y="${last[1] + 4}" font-size="13" font-weight="700" fill="#fff">${$k(run)}</text>
-    ${ym.map((m, i) => (i % Math.ceil(ym.length / 6) === 0 || i === ym.length - 1 ? `<text x="${x(i)}" y="${H - 4}" text-anchor="${i === 0 ? 'start' : 'middle'}" font-size="11" fill="#8f96bf">${mLabel(m)}</text>` : '')).join('')}
+  const vals = ym.map((m) => sum(byPm[m] || [], 'fees'));
+  if (!vals.some(Boolean)) return '';
+  const W = 540, H = 190, pt = 22, pb = 24, max = Math.max(1, ...vals), n = ym.length;
+  const bw = W / n, gap = Math.max(4, bw * 0.24), y = (v) => pt + (H - pt - pb) * (1 - v / max);
+  const cur = ym.at(-1) === curM;
+  return `<div class="cap"><span>Fees collected each month, ${YEAR()}</span><span>by Settlement Paid Date</span></div>
+  <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" aria-label="Fees collected each month in ${YEAR()}">
+    ${vals.map((v, i) => { const x = i * bw + gap / 2, w = bw - gap, top = y(v), last = cur && i === n - 1;
+      return `<rect class="gb" style="animation-delay:${i * 60}ms" x="${x}" y="${top}" width="${w}" height="${Math.max(0, H - pb - top)}" rx="3" fill="${last ? 'rgba(51,187,120,.45)' : '#33bb78'}"><title>${mLabel(ym[i], true)}: ${$f(v)}</title></rect>
+      <text class="gl" style="animation-delay:${400 + i * 60}ms" x="${x + w / 2}" y="${top - 6}" text-anchor="middle" font-size="11.5" font-weight="700" fill="#fff">${v ? $k(v) : '$0'}</text>
+      <text x="${x + w / 2}" y="${H - 6}" text-anchor="middle" font-size="11" fill="${last ? '#fff' : '#8f96bf'}">${mLabel(ym[i])}${last ? ' so far' : ''}</text>`; }).join('')}
   </svg>`;
 }
 const WAITING = ['Settled Unpaid', 'Settlement Agreement'];
@@ -464,8 +457,7 @@ function renderOverview() {
     ${step('paidc', 'Paid', m.colN, `${$k(m.col)} in fees`, m.colN / P, 'gold')}
   </div>
   <div style="margin-top:10px"><button class="pill" data-open="cb">Charged back <b>${int(m.cb)}</b> · ${pct(m.cbRate)} of packaged</button></div>
-  <div class="sectionh"><h3>Fees collected each month</h3><span>${YEAR()}, all cases, by Settlement Paid Date</span></div>
-  <div class="panel rise" style="margin-top:0;animation-delay:300ms">${bars({ months: ym, stacks: [{ label: 'Fees', color: 'var(--navy)', values: feesM }], highlight: set, labels: true, height: 240 })}</div>`;
+`;
 }
 const WON_ST = ['Settled Paid', 'Settled Unpaid', 'Settlement Agreement'];
 function chipFor(stage) { const cls = stage === 'Settled Paid' ? 'g' : WON_ST.includes(stage) ? 'y' : stage === 'Case Dismissed' ? 'r' : ''; return stage ? `<span class="chip ${cls}">${esc(stage)}</span>` : '<span class="chip r">Not in Zoho</span>'; }
