@@ -40,8 +40,8 @@ export function filingStatus(f, note = '') {
   const s = `${f} ${note}`.toLowerCase();
   const presuit = /pre-?\s?suit|presuit/.test(s);
   const filed = /\bfiled\b/.test(s) || (!presuit && isDate(String(f).trim()));
-  const aaa = /\baaa\b/.test(s), court = /court/.test(s);
-  const status = filed ? (aaa ? 'Filed with AAA' : court ? 'Filed in court' : 'Filed') : presuit ? 'Pre-suit demand out' : 'Not yet filed';
+  const aaa = /\baaa\b/.test(s), jams = /\bjams\b/.test(s), court = /court/.test(s);
+  const status = filed ? (aaa ? 'Filed with AAA' : jams ? 'Filed with JAMS' : court ? 'Filed in court' : 'Filed') : presuit ? 'Pre-suit demand out' : 'Not yet filed';
   return { presuit, filed, status, dateOnly: filed && isDate(String(f).trim()) };
 }
 

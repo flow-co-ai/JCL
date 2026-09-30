@@ -73,6 +73,8 @@ nav button[aria-selected=true]{color:#fff;border-bottom-color:var(--green)}
 .kpi .l{color:var(--muted);font-size:13px;font-weight:600}
 .kpi .v{font-family:var(--serif);font-size:36px;font-weight:600;line-height:1.1;margin:4px 0 2px;color:var(--navy)}
 .kpi .d{font-size:13px;color:var(--muted)}
+.kpi .zf{font-size:11.5px;color:var(--muted);margin-top:8px;padding-top:7px;border-top:1px dashed var(--line)}
+.rowh{font-family:var(--serif);font-size:21px;font-weight:600;color:var(--navy);margin:22px 0 10px}
 .up{color:var(--good);font-weight:700} .down{color:var(--bad);font-weight:700}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px 20px 16px;margin-top:14px}
 .panel h3,#drawer h4{margin:0 0 3px;font-family:var(--serif);font-size:23px;font-weight:600;color:var(--navy);line-height:1.2}
@@ -260,11 +262,12 @@ function metrics(rows) {
   const n = sum(rows, 'n'), cb = sum(by('Charged back'), 'n');
   const col = by('Collected'), wait = by('Won, not collected'), act = rows.filter((r) => ACTIVE.includes(r.group) && r.stage !== 'Failed Demand' && !r.dup);
   const est = sum(act, (r) => { const h = histFor(r.def); return r.n * h.win * h.avg; });
-  return { n, cb, cbRate: n ? cb / n : null, filed: sum(rows.filter((r) => r.filed), 'n'), presuit: sum(rows.filter((r) => r.presuit), 'n'), presuitOut: sum(rows.filter((r) => r.filing === 'Pre-suit demand out'), 'n'), aaa: sum(rows.filter((r) => r.filing === 'Filed with AAA'), 'n'), notYet: sum(rows.filter((r) => r.filing === 'Not yet filed' && r.group !== 'Charged back'), 'n'), drafted: sum(rows.filter((r) => r.drafted), 'n'),
+  return { n, cb, cbRate: n ? cb / n : null, filed: sum(rows.filter((r) => r.filed), 'n'), presuit: sum(rows.filter((r) => r.presuit), 'n'), presuitOut: sum(rows.filter((r) => r.filing === 'Pre-suit demand out'), 'n'), aaa: sum(rows.filter((r) => /AAA|JAMS/.test(r.filing || '')), 'n'), notYet: sum(rows.filter((r) => r.filing === 'Not yet filed' && r.group !== 'Charged back'), 'n'), drafted: sum(rows.filter((r) => r.drafted), 'n'),
     won: sum(by(WON), 'n'), colN: sum(col, 'n'), col: fees(col), waitN: sum(wait, 'n'), wait: fees(wait), actN: sum(act, 'n'), est,
     value: fees(col) + fees(wait), lost: sum(by('Dismissed'), 'n'), unmatched: sum(by('Not found in Zoho'), 'n'),
     days: sum(col, 'days_n') ? sum(col, 'days_sum') / sum(col, 'days_n') : null };
 }
+const unpaidAll = () => D.open.filter((o) => o.group === 'Won, not collected');
 const feesPaid = (set) => fees(D.paid.filter((r) => inR(r.m, set)));
 const casesPaid = (set) => sum(D.paid.filter((r) => inR(r.m, set)), 'n');
 function sameLastYear(set) { return set.map((m) => addM(m, -12)); }
@@ -305,9 +308,10 @@ function goalFor(set) {
   return { goal, actual, label: ms.length === 1 ? mLabel(ms[0], true) : `${mLabel(ms[0])}–${mLabel(ms.at(-1), true)}` };
 }
 function filingTable(rows) {
-  const order = ['Filed with AAA', 'Filed in court', 'Filed', 'Pre-suit demand out', 'Not yet filed'];
+  const order = ['Filed with AAA', 'Filed with JAMS', 'Filed in court', 'Filed', 'Pre-suit demand out', 'Not yet filed'];
+  const LABEL = { 'Pre-suit demand out': 'Demand sent (pre-suit), not filed', 'Not yet filed': 'No demand or filing yet' };
   const live = rows.filter((r) => r.group !== 'Charged back'), tot = sum(live, 'n');
-  return `<table><tbody>${order.map((k) => [k, sum(live.filter((r) => r.filing === k), 'n')]).filter((x) => x[1]).map(([k, v]) => `<tr style="cursor:default"><td class="barcell">${esc(k)}<span class="b" style="width:${(v / Math.max(1, tot)) * 100}%"></span></td><td class="num">${int(v)}</td><td class="num">${pct(v / Math.max(1, tot))}</td></tr>`).join('')}</tbody></table>`;
+  return `<table><tbody>${order.map((k) => [k, sum(live.filter((r) => r.filing === k), 'n')]).filter((x) => x[1]).map(([k, v]) => `<tr style="cursor:default"><td class="barcell">${esc(LABEL[k] || k)}<span class="b" style="width:${(v / Math.max(1, tot)) * 100}%"></span></td><td class="num">${int(v)}</td><td class="num">${pct(v / Math.max(1, tot))}</td></tr>`).join('')}</tbody></table>`;
 }
 function statusChart(rows, months) {
   const g = group(rows, (r) => r.m);
@@ -316,7 +320,7 @@ function statusChart(rows, months) {
   return bars({ months, stacks, fmt: int }) + legend(stacks.map((s) => [s.color, s.label]));
 }
 function funnel(m) {
-  const steps = [['Packaged', m.n], ['Complaint drafted', m.drafted], ['Pre-suit demand sent', m.presuit], ['Filed (court or AAA)', m.filed], ['Won', m.won], ['Collected', m.colN]];
+  const steps = [['Packaged', m.n], ['Complaint drafted', m.drafted], ['Demand sent (pre-suit)', m.presuit], ['Filed (court, AAA or JAMS)', m.filed], ['Won', m.won], ['Collected', m.colN]];
   const max = Math.max(1, m.n);
   return `<table><tbody>${steps.map(([l, v]) => `<tr style="cursor:default"><td class="barcell">${l}<span class="b" style="width:${(v / max) * 100}%"></span></td><td class="num">${int(v)}</td><td class="num">${pct(m.n ? v / m.n : null)}</td></tr>`).join('')}
     <tr style="cursor:default"><td>Charged back</td><td class="num down">${int(m.cb)}</td><td class="num">${pct(m.cbRate)}</td></tr></tbody></table>`;
@@ -334,13 +338,19 @@ function renderOverview() {
   if (m.waitN) brief.push(`${int(m.waitN)} cases are won and waiting on payment, worth ${$k(m.wait)}.`);
   const byGroup = GROUP_ORDER.map((g) => [g, sum(rows.filter((r) => r.group === g), 'n'), fees(rows.filter((r) => r.group === g))]).filter((x) => x[1]);
   return head('Overview') + `
+  <h3 class="rowh">The firm ${esc(rangeNote())}</h3>
   <div class="grid kpis">
-    <div class="kpi"><div class="l">Fees collected, all cases</div><div class="v num">${$k(feesPaid(set))}</div><div class="d">${int(casesPaid(set))} cases paid ${esc(rangeNote())}, any year packaged</div></div>
-    <div class="kpi"><div class="l">Fees collected on ${YEAR()} cases</div><div class="v num">${$k(m.col)}</div><div class="d">${int(m.colN)} of the cases packaged ${esc(rangeNote())}</div></div>
-    <div class="kpi"><div class="l">Won, waiting on payment</div><div class="v num">${$k(m.wait)}</div><div class="d">${int(m.waitN)} cases packaged ${esc(rangeNote())}</div></div>
-    <div class="kpi"><div class="l">Cases packaged</div><div class="v num">${int(m.n)}</div><div class="d">${esc(rangeNote())}</div></div>
-    <div class="kpi"><div class="l">Pre-suit demands out</div><div class="v num">${int(m.presuitOut)}</div><div class="d">sent, not filed yet · ${int(m.presuit)} sent in all</div></div>
-    <div class="kpi"><div class="l">Filed</div><div class="v num">${int(m.filed)}</div><div class="d">${pct(m.n ? m.filed / m.n : null)} of packaged · ${int(m.aaa)} with AAA</div></div>
+    <div class="kpi"><div class="l">Fees collected</div><div class="v num">${$k(feesPaid(set))}</div><div class="d">${int(casesPaid(set))} cases paid, any year packaged</div><div class="zf">Zoho: Settlement Paid Date in this period</div></div>
+    <div class="kpi"><div class="l">Settled, not paid yet · today</div><div class="v num">${int(sum(unpaidAll(), 'n'))}</div><div class="d">${$k(fees(unpaidAll()))} in fees owed</div><div class="zf">Zoho: stage Settled Unpaid or Settlement Agreement, today</div></div>
+    <div class="kpi"><div class="l">Average fee per paid case</div><div class="v num">${$k(feesPaid(set) / Math.max(1, casesPaid(set)))}</div><div class="d">all cases paid in this period</div><div class="zf">Zoho: Attorney's Fees ÷ cases paid</div></div>
+  </div>
+  <h3 class="rowh">Cases packaged ${esc(rangeNote())}</h3>
+  <div class="grid kpis">
+    <div class="kpi"><div class="l">Packaged</div><div class="v num">${int(m.n)}</div><div class="d">${int(m.cb)} charged back (${pct(m.cbRate)})</div><div class="zf">Tracker: ${YEAR()} monthly tabs; red = chargeback</div></div>
+    <div class="kpi"><div class="l">Demand sent, not filed</div><div class="v num">${int(m.presuitOut)}</div><div class="d">${int(m.presuit)} demands sent in all</div><div class="zf">Zoho: Pre-suit date, no Filed date</div></div>
+    <div class="kpi"><div class="l">Filed</div><div class="v num">${int(m.filed)}</div><div class="d">${int(m.aaa)} with AAA or JAMS</div><div class="zf">Zoho: Filed date</div></div>
+    <div class="kpi"><div class="l">Paid</div><div class="v num">${$k(m.col)}</div><div class="d">${int(m.colN)} of these cases</div><div class="zf">Zoho: Settlement Paid Date</div></div>
+    <div class="kpi"><div class="l">Settled, not paid yet</div><div class="v num">${$k(m.wait)}</div><div class="d">${int(m.waitN)} of these cases</div><div class="zf">Zoho: Settled Unpaid or Settlement Agreement</div></div>
   </div>
   ${yoyPanel()}
   <div class="panel"><h3>Cases packaged by month, and where they stand now</h3><p class="hint">${YEAR()} tracker cases, by the month they were packaged, colored by their stage in Zoho today.</p>${statusChart(D.cohort.filter((r) => inYear(r.m)), monthsChart())}</div>
