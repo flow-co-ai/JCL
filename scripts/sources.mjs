@@ -43,23 +43,24 @@ export async function zohoPull(cfg) {
   console.log(`Zoho fields: pre-suit = ${presuitField || 'not found'}, filed = ${filedField || 'not found'}`);
   let orgDomain = null;
   try { const o = await get('org', {}); orgDomain = o?.org?.[0]?.domain_name || null; } catch { /* links are optional */ }
-  const deals = await all('Deals', [...[presuitField, filedField].filter(Boolean), 'Deal_Name', 'Stage', 'Account_Name', 'Lead_Source', 'Case_Type', 'Created_Time',
+  const deals = await all('Deals', [...[presuitField, filedField].filter(Boolean), 'Deal_Name', 'Contact_Name', 'Stage', 'Account_Name', 'Lead_Source', 'Case_Type', 'Created_Time',
     'Retainer_Signed_Date', 'Lead_Intake_Date', 'Summons_Filed', 'Case_Status', 'Settled_in_Principle_EXP', 'Settled_in_Principle_EQF', 'Settled_in_Principle_TU', 'Summons_Executed', 'Settled_in_Principle', 'Stage_Modified_Time',
     'Settlement_Amount', 'Settlement_Amount_EXP', 'Settlement_Amount_EQF', 'Settlement_Amount_TU',
     'Gaurds_Law_Attorney_s_Fees', 'Client_Payout', 'Court_fee', 'Debt_Wavier', 'Debt_Waiver_2', 'Debt_Waiver_3']);
   let leads = [];
   try {
-    leads = await all('Leads', ['Lead_Source', 'Lead_Status', 'Created_Time', 'Converted__s', 'Converted_Deal'], { converted: 'both' });
+    leads = await all('Leads', ['Full_Name', 'Lead_Source', 'Lead_Status', 'Created_Time', 'Converted__s', 'Converted_Deal', 'Owner'], { converted: 'both' });
   } catch (e) {
     console.log('Leads with converted=both failed, retrying without it:', e.message);
-    leads = await all('Leads', ['Lead_Source', 'Lead_Status', 'Created_Time', 'Converted__s', 'Converted_Deal']);
+    leads = await all('Leads', ['Full_Name', 'Lead_Source', 'Lead_Status', 'Created_Time', 'Converted__s', 'Converted_Deal', 'Owner']);
   }
   // Keep only what the transform needs; drop Zoho record ids except for the lead->case link.
   return {
     zohoLink: orgDomain ? `https://crm.zoho.com/crm/${orgDomain}/tab/Potentials/` : null,
-    deals: deals.map((d) => ({ ...d, Account_Name: d.Account_Name?.name || null,
+    zohoBase: orgDomain ? `https://crm.zoho.com/crm/${orgDomain}/tab/` : null,
+    deals: deals.map((d) => ({ ...d, Account_Name: d.Account_Name?.name || null, Contact_Name: d.Contact_Name?.id || null,
       _presuit: presuitField ? d[presuitField] || null : null, _filed: filedField ? d[filedField] || null : null })),
-    leads: leads.map((l) => ({ Lead_Source: l.Lead_Source, Lead_Status: l.Lead_Status, Created_Time: l.Created_Time,
+    leads: leads.map((l) => ({ id: l.id, name: l.Full_Name || null, owner: l.Owner?.name || null, Lead_Source: l.Lead_Source, Lead_Status: l.Lead_Status, Created_Time: l.Created_Time,
       Converted: !!l.Converted__s, Deal: l.Converted_Deal?.id || null })),
     dealIds: deals.map((d) => d.id),
   };

@@ -41,7 +41,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 header{position:relative;overflow:hidden;background:radial-gradient(1100px 520px at 85% -10%,#1d2168 0%,var(--navy) 50%,var(--navy-deep) 100%);color:#fff;padding:calc(24px + env(safe-area-inset-top)) 0 0}
 header .mark{position:absolute;right:-40px;top:-50px;width:430px;opacity:.045;pointer-events:none}
 .wrap{max-width:1180px;margin:0 auto;padding:0 22px;position:relative}
-.top{padding-bottom:18px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.top{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
 .top img{height:60px;width:auto;display:block}
 .fresh{color:#9ea4c8;font-size:13px;text-align:right;line-height:1.35}
 .fresh b{display:block;color:#fff;font-family:var(--serif);font-weight:600;font-size:18px;letter-spacing:.3px}
@@ -73,14 +73,73 @@ nav button[aria-selected=true]{color:#fff;border-bottom-color:var(--green)}
 .kpi .l{color:var(--muted);font-size:13px;font-weight:600}
 .kpi .v{font-family:var(--serif);font-size:36px;font-weight:600;line-height:1.1;margin:4px 0 2px;color:var(--navy)}
 .kpi .d{font-size:13px;color:var(--muted)}
-.card{display:block;text-align:left;width:100%;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:18px 20px 16px;cursor:pointer;transition:border-color .15s, box-shadow .15s;font:inherit;color:inherit}
+.card{display:flex;flex-direction:column;text-align:left;width:100%;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:18px 20px 16px;cursor:pointer;transition:border-color .15s, box-shadow .15s;font:inherit;color:inherit}
 .card:hover{border-color:var(--navy);box-shadow:0 2px 10px rgba(18,20,74,.08)}
 .card .l{color:var(--muted);font-size:13.5px;font-weight:600}
 .card .v{font-family:var(--serif);font-size:44px;font-weight:600;line-height:1.05;color:var(--navy);margin:6px 0 2px;font-variant-numeric:lining-nums}
 .card.sm .v{font-size:32px}
-.card .d{color:var(--muted);font-size:13px;min-height:20px}
-.card .go{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+.card .d{color:var(--muted);font-size:13px;min-height:20px;margin-bottom:12px}
+.card .go{display:flex;justify-content:space-between;align-items:center;margin-top:auto;padding-top:10px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
 .card .go b{color:var(--green-ink);font-weight:700;white-space:nowrap}
+.herogrid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:40px;align-items:end}
+.herochart{min-height:10px}
+.herogrid .hstats{gap:34px}
+.herogrid .hstats div{min-width:0}
+.herochart .cap{display:flex;justify-content:space-between;color:#aeb3d1;font-size:12.5px;margin-bottom:6px}
+.herochart .cap b{color:#fff;font-weight:700}
+@media (max-width:860px){.herogrid{grid-template-columns:1fr;gap:10px}}
+@media (prefers-reduced-motion:no-preference){
+  .gb{transform-box:fill-box;transform-origin:50% 100%;animation:grow .8s cubic-bezier(.2,.8,.2,1) both}
+  .gl{animation:fade .5s ease-out both}
+  @keyframes grow{from{transform:scaleY(0)}}
+  @keyframes fade{from{opacity:0}}
+  .rise{animation:rise .6s cubic-bezier(.2,.8,.2,1) both}
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}}
+  .step .bar i{animation:fill 1.1s cubic-bezier(.2,.8,.2,1) both .25s}
+  @keyframes fill{from{width:0}}
+  .draw{stroke-dasharray:var(--len);stroke-dashoffset:var(--len);animation:draw 1.6s cubic-bezier(.4,0,.2,1) forwards .2s}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  .areaf{animation:fade 1.2s ease-out both .8s}
+  .dot{animation:pop .4s ease-out both}
+  @keyframes pop{from{opacity:0;transform:scale(.3)}}
+  .live{animation:pulse 2.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+}
+.cr{border:1px solid var(--line);border-radius:6px;margin:0 0 8px;background:#fff}
+.cr summary{list-style:none;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:11px 14px;cursor:pointer}
+.cr summary::-webkit-details-marker{display:none}
+.cr summary .nm{font-weight:700;color:var(--navy);line-height:1.3}
+.cr summary .sb{display:block;color:var(--muted);font-size:12px;font-weight:400;margin-top:2px}
+.cr summary .amt{text-align:right;font-weight:700;color:var(--ink);white-space:nowrap}
+.cr summary .amt small{display:block;color:var(--muted);font-weight:400;font-size:11.5px}
+.cr[open]{border-color:var(--navy)}
+.crd{border-top:1px solid var(--line);padding:12px 14px 14px;display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:13px}
+.crd div span{display:block;color:var(--muted);font-size:11.5px}
+.crd .full{grid-column:1/-1}
+.zbtn{display:inline-flex;align-items:center;gap:6px;background:var(--navy);color:#fff !important;text-decoration:none;border-radius:4px;padding:8px 12px;font-size:12.5px;font-weight:700;margin-top:4px}
+.zbtn.ghost{background:#fff;color:var(--navy) !important;border:1px solid var(--navy)}
+.chip{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:#eef0f6;color:var(--navy);margin-left:6px;vertical-align:1px}
+.chip.g{background:#e3f4ea;color:var(--green-ink)} .chip.r{background:#fbeae7;color:var(--bad)} .chip.y{background:#fbf2df;color:#8a6414}
+.dtop{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+.journey{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.step{position:relative;text-align:left;background:none;border:0;border-right:1px solid var(--line);padding:20px 22px 18px;cursor:pointer;font:inherit;color:inherit;transition:background .15s}
+.step:last-child{border-right:0}
+.step:hover{background:#f6f7fb}
+.step .n{font-family:var(--serif);font-size:46px;font-weight:600;line-height:1;color:var(--navy);font-variant-numeric:lining-nums;margin:10px 0 6px}
+.step .t{font-size:12px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:var(--muted)}
+.step .p{font-size:13px;color:var(--muted)}
+.step .bar{height:4px;border-radius:2px;background:#e7e9f1;margin-top:14px;overflow:hidden;display:block}
+.step .bar i{display:block;height:100%;background:var(--green)}
+.step:not(:last-child)::after{content:'';position:absolute;right:-7px;top:50%;width:12px;height:12px;background:var(--card);border-top:1px solid var(--line);border-right:1px solid var(--line);transform:translateY(-50%) rotate(45deg);z-index:1}
+.step:hover::after{background:#f6f7fb}
+.step.gold .n{color:var(--green-ink)}
+.sectionh{display:flex;justify-content:space-between;align-items:baseline;margin:30px 0 12px;gap:12px;flex-wrap:wrap}
+.sectionh h3{margin:0;font-family:var(--serif);font-size:26px;font-weight:600;color:var(--navy)}
+.sectionh span{color:var(--muted);font-size:13px}
+.pill{display:inline-flex;gap:8px;align-items:center;border:1px solid var(--line);background:var(--card);border-radius:20px;padding:6px 12px;font-size:13px;color:var(--muted);cursor:pointer;font:inherit}
+.pill:hover{border-color:var(--bad);color:var(--bad)}
+.pill b{color:var(--bad)}
+@media (max-width:860px){.journey{grid-template-columns:1fr 1fr}.step{border-bottom:1px solid var(--line)}.step::after{display:none}.step .n{font-size:36px}}
 .cards4{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
 .cards3{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
 .kpi .zf{font-size:11.5px;color:var(--muted);margin-top:8px;padding-top:7px;border-top:1px dashed var(--line)}
@@ -151,6 +210,9 @@ svg text{font-family:var(--font)}
 <header><img class="mark" src="data:image/png;base64,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" alt="" aria-hidden="true">
   <div class="wrap">
     <div class="top"><img id="hlogo" alt="Justice Consumer Law"><span class="fresh"><b>Firm Report</b><span id="fresh"></span></span></div>
+    <div class="herogrid"><div><h1 class="headline" id="headline"></h1>
+    <div class="rule"></div>
+    <div class="hstats" id="hstats"></div></div><div class="herochart" id="hchart"></div></div>
 
     <nav role="tablist" id="tabs"></nav>
   </div>
@@ -236,8 +298,8 @@ function bars({ months, stacks, height = 220, fmt = $k, ghost = null, highlight 
     let base = 0; const x = pad.l + i * bw + gap / 2, w = bw - gap;
     const dim = highlight && !highlight.includes(m);
     stacks.forEach((s) => { const v = s.values[i] || 0; if (!v) return; const y1 = y(base + v), y0 = y(base);
-      svg += `<rect x="${x}" y="${y1}" width="${w}" height="${Math.max(0, y0 - y1)}" fill="${s.color}" opacity="${dim ? 0.35 : 1}"><title>${esc(s.label)} ${mLabel(m, true)}: ${fmt(v)}</title></rect>`; base += v; });
-    if (labels && totals[i]) svg += `<text x="${x + w / 2}" y="${y(totals[i]) - 6}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--navy)">${fmt(totals[i])}</text>`;
+      svg += `<rect class="gb" style="animation-delay:${i * 45}ms" x="${x}" y="${y1}" width="${w}" height="${Math.max(0, y0 - y1)}" rx="${Math.min(4, w / 6)}" fill="${s.color}" opacity="${dim ? 0.35 : 1}"><title>${esc(s.label)} ${mLabel(m, true)}: ${fmt(v)}</title></rect>`; base += v; });
+    if (labels && totals[i]) svg += `<text class="gl" style="animation-delay:${300 + i * 45}ms" x="${x + w / 2}" y="${y(totals[i]) - 6}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--navy)">${fmt(totals[i])}</text>`;
     if (ghost && ghost[i]) svg += `<line x1="${x}" x2="${x + w}" y1="${y(ghost[i])}" y2="${y(ghost[i])}" stroke="var(--gold)" stroke-width="2.5" stroke-dasharray="5 3"><title>Same month a year earlier: ${fmt(ghost[i])}</title></line>`;
     const every = Math.max(1, Math.ceil(44 / bw));
     if (i % every === 0 || i === months.length - 1) svg += `<text x="${x + w / 2}" y="${H - 8}" text-anchor="middle" font-size="12" fill="var(--muted)">${mLabel(m, m.endsWith('-01') || i === 0)}</text>`;
@@ -335,6 +397,39 @@ function funnel(m) {
     <tr style="cursor:default"><td>Charged back</td><td class="num down">${int(m.cb)}</td><td class="num">${pct(m.cbRate)}</td></tr></tbody></table>`;
 }
 
+const FMT = { k: $k, int, pct: (v) => pct(v) };
+const cnt = (v, f = 'int') => `<span data-to="${+v || 0}" data-f="${f}">${FMT[f](v)}</span>`;
+const motionOK = () => !matchMedia('(prefers-reduced-motion: reduce)').matches;
+function animateNumbers(root = document) {
+  if (!motionOK()) return;
+  root.querySelectorAll('[data-to]').forEach((el) => {
+    const to = +el.dataset.to, f = FMT[el.dataset.f] || int, t0 = performance.now(), dur = 1100;
+    const tick = (t) => { const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3); el.textContent = f(el.dataset.f === 'pct' ? to * e : to * e); if (p < 1) requestAnimationFrame(tick); else el.textContent = f(to); };
+    requestAnimationFrame(tick);
+  });
+}
+function heroChart() {
+  const ym = yearMonths(), byPm = group(firm().filter((c) => c.pm), (c) => c.pm);
+  let run = 0; const cum = ym.map((m) => (run += sum(byPm[m] || [], 'fees')));
+  if (!cum.length || !run) return '';
+  const W = 520, H = 170, pl = 6, pr = 58, pt = 16, pb = 22, max = Math.max(1, ...cum);
+  const x = (i) => pl + (ym.length === 1 ? 0 : (i / (ym.length - 1)) * (W - pl - pr)), y = (v) => pt + (H - pt - pb) * (1 - v / max);
+  const pts = cum.map((v, i) => [x(i), y(v)]);
+  const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const area = `${line} L ${x(ym.length - 1)} ${H - pb} L ${x(0)} ${H - pb} Z`;
+  let len = 0; for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  const last = pts.at(-1);
+  return `<div class="cap"><span>Fees collected, running total ${YEAR()}</span><span><span class="live" style="color:var(--green)">●</span> refreshed every 2 hours</span></div>
+  <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" aria-label="Running total of fees collected in ${YEAR()}">
+    <defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#33bb78" stop-opacity=".45"/><stop offset="1" stop-color="#33bb78" stop-opacity="0"/></linearGradient></defs>
+    ${[0.25, 0.5, 0.75, 1].map((f) => `<line x1="${pl}" x2="${W - pr}" y1="${y(max * f)}" y2="${y(max * f)}" stroke="rgba(255,255,255,.07)"/>`).join('')}
+    <path class="areaf" d="${area}" fill="url(#hg)"/>
+    <path class="draw" style="--len:${Math.ceil(len)}" d="${line}" fill="none" stroke="#33bb78" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${pts.map((p, i) => `<circle class="dot" style="animation-delay:${200 + i * 140}ms;transform-origin:${p[0]}px ${p[1]}px" cx="${p[0]}" cy="${p[1]}" r="${i === pts.length - 1 ? 5 : 2.5}" fill="${i === pts.length - 1 ? '#fff' : '#33bb78'}"><title>${mLabel(ym[i], true)}: ${$k(cum[i])} so far</title></circle>`).join('')}
+    <text x="${last[0] + 10}" y="${last[1] + 4}" font-size="13" font-weight="700" fill="#fff">${$k(run)}</text>
+    ${ym.map((m, i) => (i % Math.ceil(ym.length / 6) === 0 || i === ym.length - 1 ? `<text x="${x(i)}" y="${H - 4}" text-anchor="${i === 0 ? 'start' : 'middle'}" font-size="11" fill="#8f96bf">${mLabel(m)}</text>` : '')).join('')}
+  </svg>`;
+}
 const WAITING = ['Settled Unpaid', 'Settlement Agreement'];
 const firm = () => (D.firm_cases || []).filter((c) => !c.dup);
 const paidIn = (set) => firm().filter((c) => c.pm && inR(c.pm, set));
@@ -343,34 +438,67 @@ function spark(values, color = 'var(--green)') {
   const W = 220, H = 36, max = Math.max(1, ...values), bw = W / Math.max(1, values.length);
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none" aria-hidden="true">${values.map((v, i) => `<rect x="${i * bw + 1.5}" y="${H - (v / max) * (H - 2)}" width="${bw - 3}" height="${(v / max) * (H - 2)}" rx="1.5" fill="${color}" opacity="${i === values.length - 1 ? 1 : 0.45}"/>`).join('')}</svg>`;
 }
-function card(key, label, value, sub, sparkVals, small = false) {
-  return `<button class="card${small ? ' sm' : ''}" data-open="${key}"><div class="l">${label}</div><div class="v num">${value}</div><div class="d">${sub}</div>${sparkVals ? spark(sparkVals) : ''}<div class="go"><span>${sparkVals ? 'Monthly, ' + YEAR() : ''}</span><b>See the cases →</b></div></button>`;
+function card(key, label, value, sub, sparkVals, small = false, delay = 0) {
+  return `<button class="card rise${small ? ' sm' : ''}" style="animation-delay:${delay}ms" data-open="${key}"><div class="l">${label}</div><div class="v num">${value}</div><div class="d">${sub}</div>${sparkVals ? spark(sparkVals) : ''}<div class="go"><span>${sparkVals ? 'Monthly, ' + YEAR() : ''}</span><b>See the cases →</b></div></button>`;
 }
 function renderOverview() {
   const set = RANGES[range].months(), ym = yearMonths();
   const paid = paidIn(set), unpaid = unpaidIn(set), m = metrics(C(set));
   const byPm = group(firm().filter((c) => c.pm), (c) => c.pm);
-  const byCm = group(D.cohort, (r) => r.m);
   const feesM = ym.map((x) => sum(byPm[x] || [], 'fees'));
-  return `<div class="bar"><h2>${esc(rangeNote())}</h2>${rangeCtl()}</div>
-  <div class="grid cards4">
-    ${card('fees', 'Fees collected', $k(sum(paid, 'fees')), `${int(paid.length)} cases paid · any year packaged`, feesM)}
-    ${card('paid', 'Cases paid', int(paid.length), `${$k(sum(paid, 'fees') / Math.max(1, paid.length))} average fee`, ym.map((x) => (byPm[x] || []).length))}
-    ${card('unpaid', 'Settled, not paid yet', int(unpaid.length), `${$k(sum(unpaid, 'fees'))} in fees owed`, null)}
-    ${card('packaged', 'Cases packaged', int(m.n), `${int(m.cb)} charged back`, ym.map((x) => sum(byCm[x] || [], 'n')))}
+  const won = m.colN + m.waitN, P = Math.max(1, m.n);
+  const step = (key, t, n, p, share, cls = '') => `<button class="step ${cls}" data-open="${key}"><div class="t">${t}</div><div class="n">${cnt(n)}</div><div class="p">${p}</div><span class="bar"><i style="width:${Math.min(100, share * 100)}%"></i></span></button>`;
+  return `<div class="bar"><h2>Overview</h2>${rangeCtl()}</div>
+  <div class="sectionh"><h3>The firm's money</h3><span>All cases, any year packaged · ${esc(rangeNote())}</span></div>
+  <div class="grid cards3">
+    ${card('fees', 'Fees collected', cnt(sum(paid, 'fees'), 'k'), `${int(paid.length)} cases paid`, feesM, false, 0)}
+    ${card('unpaid', 'Settled, not paid yet', cnt(sum(unpaid, 'fees'), 'k'), `${int(unpaid.length)} cases settled ${esc(rangeNote())}, fees owed`, ym.map((x) => sum(unpaid.filter((c) => c.sm === x), 'fees')), false, 80)}
+    ${card('paid', 'Average fee per paid case', cnt(sum(paid, 'fees') / Math.max(1, paid.length), 'k'), 'fees ÷ cases paid', ym.map((x) => { const r = paidIn([x]); return r.length ? sum(r, 'fees') / r.length : 0; }), false, 160)}
   </div>
-  <div class="grid cards3" style="margin-top:14px">
-    ${card('presuit', 'Demand sent, not filed', int(m.presuitOut), 'of the cases packaged', null, true)}
-    ${card('filed', 'Filed', int(m.filed), `${int(m.aaa)} with AAA or JAMS`, null, true)}
-    ${card('cb', 'Charged back', int(m.cb), `${pct(m.cbRate)} of cases packaged`, null, true)}
+  <div class="sectionh"><h3>Cases packaged ${esc(rangeNote())}</h3><span>From the tracker, with each case's status in Zoho today · click any step</span></div>
+  <div class="journey rise" style="animation-delay:200ms">
+    ${step('packaged', 'Packaged', m.n, `${int(m.n - m.cb)} active`, 1)}
+    ${step('presuit', 'Pre-suit demand sent', m.presuit, `${int(m.presuitOut)} waiting, not filed`, m.presuit / P)}
+    ${step('filed', 'Filed', m.filed, `${int(m.aaa)} with AAA or JAMS`, m.filed / P)}
+    ${step('settled', 'Settled', won, `${int(m.waitN)} not paid yet`, won / P)}
+    ${step('paidc', 'Paid', m.colN, `${$k(m.col)} in fees`, m.colN / P, 'gold')}
   </div>
-  <div class="panel"><h3>Fees collected each month</h3><p class="hint">${YEAR()}, all cases, by the date the settlement was paid.</p>
-    ${bars({ months: ym, stacks: [{ label: 'Fees', color: 'var(--navy)', values: feesM }], highlight: set, labels: true, height: 240 })}</div>
-  <div class="panel"><h3>Cases packaged each month</h3><p class="hint">${YEAR()}, from the tracker.</p>
-    ${bars({ months: ym, stacks: [{ label: 'Packaged', color: 'var(--green-ink)', values: ym.map((x) => sum(byCm[x] || [], 'n')) }], highlight: set, labels: true, fmt: int, height: 200 })}</div>`;
+  <div style="margin-top:10px"><button class="pill" data-open="cb">Charged back <b>${int(m.cb)}</b> · ${pct(m.cbRate)} of packaged</button></div>
+  <div class="sectionh"><h3>Fees collected each month</h3><span>${YEAR()}, all cases, by Settlement Paid Date</span></div>
+  <div class="panel rise" style="margin-top:0;animation-delay:300ms">${bars({ months: ym, stacks: [{ label: 'Fees', color: 'var(--navy)', values: feesM }], highlight: set, labels: true, height: 240 })}</div>`;
 }
+const WON_ST = ['Settled Paid', 'Settled Unpaid', 'Settlement Agreement'];
+function chipFor(stage) { const cls = stage === 'Settled Paid' ? 'g' : WON_ST.includes(stage) ? 'y' : stage === 'Case Dismissed' ? 'r' : ''; return stage ? `<span class="chip ${cls}">${esc(stage)}</span>` : '<span class="chip r">Not in Zoho</span>'; }
+function caseRow(c) {
+  const z = c.z || {}, won = (WON_ST.includes(c.stage) || !!c.paid || !!c.z?.paid) && !c.dup, amt = won && c.fees ? $f(c.fees) : '';
+  const f = (l, v) => (v || v === 0 ? `<div><span>${l}</span>${v}</div>` : '');
+  const s4 = (c.s || []).map((v, i) => (v ? `D${i + 1} ${$f(v)}` : '')).filter(Boolean).join(' · ');
+  return `<details class="cr"><summary><div><span class="nm">${esc(c.name)}</span>${chipFor(c.stage)}<span class="sb">${esc(c.def || c.def1 || c.defKey || '')}${c.m ? ` · packaged ${mLabel(c.m, true)}` : ''}${c.red ? ' · <b style="color:var(--bad)">charged back</b>' : ''}${c.dup ? ' · duplicate record' : ''}</span></div>
+    <div class="amt">${amt}${amt ? '<small>attorney fees</small>' : ''}</div></summary>
+    <div class="crd">
+      ${f('Case type', esc(z.type))}${f('Lead source (Zoho)', esc(z.src))}
+      ${c.member ? f('Packaged by', esc(c.member)) : ''}${c.src ? f('Source (tracker)', esc(c.src)) : ''}
+      ${f('Created in Zoho', esc(z.created))}${f('Retainer signed', esc(z.retainer))}
+      ${f('Pre-suit date', esc(z.presuit))}${f('Filed date', esc(z.filed))}
+      ${f('Settled', esc(z.settled || c.settled))}${f('Settlement paid', esc(z.paid || c.paid))}
+      ${s4 ? `<div class="full"><span>Settlement by defendant</span>${s4}</div>` : ''}
+      ${won ? f('Attorney fees', $f(c.fees)) + f('Client payout', $f(c.payout)) : ''}${z.court ? f('Court fee', $f(z.court)) : ''}
+      ${c.filingText ? `<div class="full"><span>Tracker filing note</span>${esc(c.filingText)}</div>` : ''}
+      ${z.status ? `<div class="full"><span>Case status (Zoho)</span>${esc(z.status)}</div>` : ''}
+      <div class="full">${c.id && D.zoho_link ? `<a class="zbtn" href="${esc(D.zoho_link + c.id)}" target="_blank" rel="noopener">Open case in Zoho ↗</a>` : '<span>Not matched to a Zoho case.</span>'}</div>
+    </div></details>`;
+}
+function leadRow(l) {
+  const link = l.id && D.zoho_base ? `${D.zoho_base}Leads/${l.id}` : null, deal = l.deal && D.zoho_link ? D.zoho_link + l.deal : null;
+  return `<details class="cr"><summary><div><span class="nm">${esc(l.name)}</span><span class="chip${l.status === 'Became a case' ? ' g' : ''}">${esc(l.status)}</span><span class="sb">${esc(l.src)} · ${esc(l.date)}</span></div><div class="amt"></div></summary>
+    <div class="crd">${l.rawSrc ? `<div><span>Lead source (Zoho)</span>${esc(l.rawSrc)}</div>` : ''}${l.owner ? `<div><span>Lead owner</span>${esc(l.owner)}</div>` : ''}
+      <div><span>Created</span>${esc(l.date)}</div>${l.dealStage ? `<div><span>Case stage now</span>${esc(l.dealStage)}</div>` : ''}
+      <div class="full">${link ? `<a class="zbtn" href="${esc(link)}" target="_blank" rel="noopener">Open lead in Zoho ↗</a> ` : ''}${deal ? `<a class="zbtn ghost" href="${esc(deal)}" target="_blank" rel="noopener">Open the case ↗</a>` : ''}</div></div></details>`;
+}
+const moduleBtn = (mod, label) => (D.zoho_base ? `<div class="dtop"><a class="zbtn ghost" href="${esc(D.zoho_base + mod)}" target="_blank" rel="noopener">${label} ↗</a></div>` : '');
 function zlink(c) { return c.id && D.zoho_link ? `<a href="${esc(D.zoho_link + c.id)}" target="_blank" rel="noopener" style="color:var(--navy);font-weight:600">${esc(c.name)} ↗</a>` : esc(c.name); }
-function listDrawer(title, hint, cols, rows, foot = '') {
+function listDrawer(title, hint, cols, rows, foot = '', kind = 'case') {
+  if (kind) { openDrawer(`<h3>${esc(title)}</h3><p class="hint">${hint} Tap a row for its Zoho details.</p>${moduleBtn(kind === 'lead' ? 'Leads' : 'Potentials', kind === 'lead' ? 'Open Leads in Zoho' : 'Open Cases in Zoho')}${foot}${rows.map(kind === 'lead' ? leadRow : caseRow).join('') || '<p class="empty">None in this period.</p>'}`); return; }
   openDrawer(`<h3>${esc(title)}</h3><p class="hint">${hint}</p>${foot}
     <div class="tw"><table><thead><tr style="cursor:default">${cols.map(([l], i) => `<th style="cursor:default${i ? '' : ';text-align:left'}">${l}</th>`).join('')}</tr></thead>
     <tbody>${rows.map((r) => `<tr style="cursor:default">${cols.map(([, f], i) => `<td${i ? ' class="num"' : ''}>${f(r)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${cols.length}" class="empty">None in this period.</td></tr>`}</tbody></table></div>`);
@@ -380,21 +508,35 @@ function openCard(key) {
   const list = (D.cases || []).filter((c) => inR(c.m, set));
   const caseCol = ['Case', (c) => `${zlink(c)}<span class="sm">${esc(c.def || c.def1 || c.defKey || '')}</span>`];
   const total = (rows, f, label) => `<div class="kpi" style="margin:0 0 14px"><div class="l">${label}</div><div class="v num">${f(rows)}</div></div>`;
+  if (key.startsWith('lsrc:') || key.startsWith('lst:')) {
+    const [kind, val] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)];
+    const rows = (D.lead_list || []).filter((l) => (kind === 'lsrc' ? l.src === val : l.status === val) && (kind === 'lst' ? l.date >= new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10) : inR(l.m, set))).sort((a, b) => b.date.localeCompare(a.date));
+    listDrawer(kind === 'lsrc' ? `${val} leads` : val, kind === 'lsrc' ? `Leads from ${esc(val)} created ${esc(when)}, newest first.` : 'Leads from the last 90 days with this status in Zoho.', [], rows,
+      `<div class="grid kpis" style="margin-bottom:14px"><div class="kpi"><div class="l">Leads</div><div class="v num">${int(rows.length)}</div></div><div class="kpi"><div class="l">Became cases</div><div class="v num">${int(rows.filter((l) => l.status === 'Became a case').length)}</div></div></div>`, 'lead');
+    return;
+  }
   if (key === 'fees' || key === 'paid') {
     const rows = paidIn(set).sort((a, b) => b.paid.localeCompare(a.paid)), dups = (D.firm_cases || []).filter((c) => c.dup && c.pm && inR(c.pm, set)).length;
+    const all = (D.firm_cases || []).filter((c) => c.pm && inR(c.pm, set));
+    const cl = new Set(rows.map((c) => c.client).filter(Boolean)).size;
+    const brk = [['Zoho case records with a paid date', all.length], ['Duplicate records (same case name), left out', all.filter((c) => c.dup).length],
+      ['Cases counted', rows.length], ['…in stage Settled Paid', rows.filter((c) => c.stage === 'Settled Paid').length], ['…with a paid date but another stage', rows.filter((c) => c.stage !== 'Settled Paid').length],
+      [`…packaged in ${YEAR()}`, rows.filter((c) => c.cy === String(YEAR())).length], ['…packaged earlier', rows.filter((c) => c.cy !== String(YEAR())).length], ['Different clients paid', cl]];
+    const brkHtml = `<table style="margin-bottom:16px"><tbody>${brk.map(([l, v]) => `<tr style="cursor:default"><td>${l}</td><td class="num"><strong>${int(v)}</strong></td></tr>`).join('')}</tbody></table>`;
     listDrawer(key === 'fees' ? 'Fees collected' : 'Cases paid', `Every Zoho case with a Settlement Paid Date in ${esc(when)}, whatever year it was packaged. Click a case to open it in Zoho.${dups ? ` ${dups} duplicate Zoho record${dups === 1 ? '' : 's'} with the same case name ${dups === 1 ? 'is' : 'are'} left out.` : ''}`,
       [caseCol, ['Paid', (c) => esc(c.paid)], ['Fees', (c) => $f(c.fees)], ['Client payout', (c) => $f(c.payout)]], rows,
-      `<div class="grid kpis" style="margin-bottom:14px"><div class="kpi"><div class="l">Cases</div><div class="v num">${int(rows.length)}</div></div><div class="kpi"><div class="l">Fees</div><div class="v num">${$k(sum(rows, 'fees'))}</div></div></div>`);
+      `<div class="grid kpis" style="margin-bottom:14px"><div class="kpi"><div class="l">Cases</div><div class="v num">${int(rows.length)}</div></div><div class="kpi"><div class="l">Fees</div><div class="v num">${$k(sum(rows, 'fees'))}</div></div></div><h4>How this number is built</h4>${brkHtml}<h4>The cases</h4>`);
   } else if (key === 'unpaid') {
     const rows = unpaidIn(set).sort((a, b) => (a.settled || '').localeCompare(b.settled || ''));
     listDrawer('Settled, not paid yet', `Zoho cases in Settled Unpaid or Settlement Agreement that settled in ${esc(when)}. Oldest first, so the longest waits are at the top.`,
       [caseCol, ['Stage', (c) => esc(c.stage)], ['Settled', (c) => esc(c.settled || '–')], ['Days waiting', (c) => (c.settled ? int((Date.now() - new Date(c.settled)) / 864e5) : '–')], ['Fees owed', (c) => $f(c.fees)]], rows,
       total(rows, (r) => $k(sum(r, 'fees')), `${int(rows.length)} cases, fees owed`));
   } else {
-    const pick = { packaged: () => true, presuit: (c) => c.filing === 'Pre-suit demand out' && !c.red, filed: (c) => /^Filed/.test(c.filing || '') && !c.red, cb: (c) => c.red }[key];
-    const title = { packaged: 'Cases packaged', presuit: 'Demand sent, not filed', filed: 'Filed', cb: 'Charged back' }[key];
+    const WON3 = ['Settled Paid', 'Settled Unpaid', 'Settlement Agreement'];
+    const pick = { packaged: () => true, presuit: (c) => c.presuit && !c.red, filed: (c) => c.filed && !c.red, cb: (c) => c.red, settled: (c) => !c.dup && WON3.includes(c.stage), paidc: (c) => !c.dup && (c.stage === 'Settled Paid' || !!c.paid) }[key];
+    const title = { packaged: 'Cases packaged', presuit: 'Pre-suit demand sent', filed: 'Filed', cb: 'Charged back', settled: 'Settled', paidc: 'Paid' }[key];
     const rows = list.filter(pick).sort((a, b) => b.m.localeCompare(a.m) || a.name.localeCompare(b.name));
-    listDrawer(title, `Cases on the ${YEAR()} tracker packaged in ${esc(when)}. Stage is from Zoho; click a case to open it there.`,
+    listDrawer(title, `Cases on the ${YEAR()} tracker packaged in ${esc(when)}.${key === 'presuit' ? ' A pre-suit demand counts when Zoho has a Pre-suit date or the tracker says a demand went out; if the case was later filed, it also appears under Filed.' : ''} Stage is from Zoho.`,
       [['Case', (c) => `${zlink(c)}<span class="sm">${mLabel(c.m, true)} · ${esc(c.member)} · ${esc(c.src)}</span>`], ['Filing', (c) => esc(c.filing || '–')], ['Zoho stage', (c) => esc(c.stage || 'Not in Zoho')]], rows,
       total(rows, (r) => int(r.length), 'Cases'));
   }
@@ -503,9 +645,9 @@ function renderIntake() {
   <div class="panel"><h3>Leads by month</h3><p class="hint">${YEAR()}, from Zoho leads, by lead source in Zoho.</p>${bars({ months, stacks, fmt: int })}${legend(stacks.map((s) => [s.color, s.label]))}</div>
   <div class="grid two">
     <div class="panel"><h3>Leads that became cases</h3><p class="hint">Leads created ${esc(rangeNote())}.</p><div class="tw"><table><thead><tr><th>Source</th><th>Leads</th><th>Became cases</th><th>Rate</th></tr></thead><tbody>
-      ${conv.map((r) => `<tr style="cursor:default"><td>${esc(r.s)}</td><td class="num">${int(r.n)}</td><td class="num">${int(r.c)}</td><td class="num">${pct(r.n ? r.c / r.n : null)}</td></tr>`).join('')}</tbody></table></div></div>
+      ${conv.map((r) => `<tr data-open="lsrc:${esc(r.s)}"><td>${esc(r.s)} <span class="sm">see the leads →</span></td><td class="num">${int(r.n)}</td><td class="num">${int(r.c)}</td><td class="num">${pct(r.n ? r.c / r.n : null)}</td></tr>`).join('')}</tbody></table></div></div>
     <div class="panel"><h3>What happened to last 90 days of leads</h3><p class="hint">Lead status in Zoho today.</p><table><tbody>
-      ${st.slice(0, 10).map(([k, v]) => `<tr style="cursor:default"><td class="barcell">${esc(k)}<span class="b" style="width:${(v / Math.max(1, st[0][1])) * 100}%"></span></td><td class="num">${int(v)}</td><td class="num">${pct(v / stTotal)}</td></tr>`).join('')}</tbody></table></div>
+      ${st.slice(0, 10).map(([k, v]) => `<tr data-open="lst:${esc(k)}"><td class="barcell">${esc(k)}<span class="b" style="width:${(v / Math.max(1, st[0][1])) * 100}%"></span></td><td class="num">${int(v)}</td><td class="num">${pct(v / stTotal)}</td></tr>`).join('')}</tbody></table></div>
   </div>
   ${trackerPanels(set)}
   <div class="panel"><h3>Packaged cases by stage in Zoho</h3><p class="hint">Cases packaged ${esc(rangeNote())}. Days waiting is shown for cases won but not yet paid.</p><div class="tw"><table><thead><tr><th>Stage</th><th>Cases</th><th>Fees recorded</th><th>Avg days waiting</th></tr></thead><tbody>
@@ -549,7 +691,7 @@ function drawer(key, field, title) {
     <div class="grid kpis" style="margin:14px 0"><div class="kpi"><div class="l">Packaged</div><div class="v num">${int(m.n)}</div></div><div class="kpi"><div class="l">Collected</div><div class="v num">${$k(m.col)}</div></div><div class="kpi"><div class="l">Won, waiting</div><div class="v num">${$k(m.wait)}</div></div></div>
     <h4>By month and stage</h4>${statusChart(D.cohort.filter((r) => inYear(r.m) && r[field] === key), months)}
     <h4>The cases</h4><p class="hint">Click a case to open it in Zoho. For won cases, D1–D4 are each defendant's settlement and the right column is the attorney fee.</p>
-    <table><tbody>${list.map((c) => `<tr style="cursor:default"><td>${c.id && D.zoho_link ? `<a href="${esc(D.zoho_link + c.id)}" target="_blank" rel="noopener" style="color:var(--navy)">${esc(c.name)} ↗</a>` : esc(c.name)}<span class="sm">${esc(c.stage || 'Not found in Zoho')}${c.red ? ' · charged back' : ''}${c.dup ? ' · same Zoho case as another row, not counted twice' : ''}</span>${amounts(c) ? `<span class="sm">${amounts(c)}</span>` : ''}</td><td class="num">${isWon(c) && c.fees ? $k(c.fees) + '<span class="sm">fees</span>' : '–'}</td></tr>`).join('') || '<tr><td>None</td></tr>'}</tbody></table>`);
+    ${moduleBtn('Potentials', 'Open Cases in Zoho')}${list.map(caseRow).join('') || '<p class="empty">None</p>'}<table style="display:none"><tbody>${list.map((c) => `<tr style="cursor:default"><td>${c.id && D.zoho_link ? `<a href="${esc(D.zoho_link + c.id)}" target="_blank" rel="noopener" style="color:var(--navy)">${esc(c.name)} ↗</a>` : esc(c.name)}<span class="sm">${esc(c.stage || 'Not found in Zoho')}${c.red ? ' · charged back' : ''}${c.dup ? ' · same Zoho case as another row, not counted twice' : ''}</span>${amounts(c) ? `<span class="sm">${amounts(c)}</span>` : ''}</td><td class="num">${isWon(c) && c.fees ? $k(c.fees) + '<span class="sm">fees</span>' : '–'}</td></tr>`).join('') || '<tr><td>None</td></tr>'}</tbody></table>`);
 }
 
 /* ---------- hero ---------- */
@@ -562,13 +704,20 @@ function vs(a, b, prior, fmt = int) {
   const c = Math.round(((a - b) / b) * 100);
   return Math.abs(c) < 1 ? `, flat on ${prior}` : `, ${c >= 0 ? 'up' : 'down'} ${Math.abs(c)}% on ${prior}`;
 }
-function hero() { return; }
-function heroOld() {
+function hero() {
+  $('#hchart').innerHTML = '';
   const r = RANGES[range], set = r.months(), pset = r.prior(), [when, prior] = PHRASE[range];
   const G = (v) => `<b>${v}</b>`;
   const m = metrics(C(set)), pm = pset ? metrics(C(pset)) : null;
   let h = '', st = [];
   if (view === 'overview') {
+    const paid = paidIn(set), unpaid = unpaidIn(set), clients = new Set(paid.map((c) => c.client).filter(Boolean)).size;
+    h = `<b>${cnt(sum(paid, 'fees'), 'k')}</b> in fees collected ${when}.`;
+    st = [[cnt(paid.length), `cases paid${clients ? ` · ${int(clients)} clients` : ''}`], [cnt(unpaid.length), `settled, not paid yet · ${$k(sum(unpaid, 'fees'))} owed`], [cnt(m.n), `cases packaged ${when}`]];
+    $('#hchart').innerHTML = heroChart();
+    $('#headline').innerHTML = h; $('#hstats').innerHTML = st.map(([v, l]) => `<div><div class="v num">${v}</div><div class="l">${l}</div></div>`).join(''); return;
+  }
+  if (false) {
     const gl = goalFor(set), fAll = feesPaid(set), fLy = feesPaid(sameLastYear(set));
     const c = fLy ? Math.round(((fAll - fLy) / fLy) * 100) : null;
     h = `${G($k(fAll))} in fees collected ${when}${c != null && range !== 'month' ? `, ${c >= 0 ? 'up' : 'down'} ${Math.abs(c)}% on the same period last year` : ''}.`;
@@ -604,6 +753,7 @@ function heroOld() {
 function render() {
   hero();
   $('#tabs').innerHTML = Object.entries(VIEWS).map(([k, l]) => `<button role="tab" data-view="${k}" aria-selected="${k === view}">${l}</button>`).join('');
+  requestAnimationFrame(() => animateNumbers());
   $('#view').innerHTML = { overview: renderOverview, defendants: renderDefendants, sources: renderSources, team: renderTeam, marketing: renderMarketing, intake: renderIntake }[view]();
 }
 function start() {

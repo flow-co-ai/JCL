@@ -24,6 +24,12 @@ function defendantKey(name, aliases) {
     .replace(/\s+/g, ' ').trim();
 }
 
+const zd = (d, lsrc) => d ? {
+  type: d.Case_Type && d.Case_Type !== '-None-' ? d.Case_Type : null, src: d.Lead_Source && d.Lead_Source !== '-None-' ? d.Lead_Source : null,
+  created: String(d.Created_Time || '').slice(0, 10) || null, retainer: d.Retainer_Signed_Date || null,
+  presuit: d._presuit ? String(d._presuit).slice(0, 10) : null, filed: d._filed ? String(d._filed).slice(0, 10) : null,
+  settled: d.Settled_in_Principle ? String(d.Settled_in_Principle).slice(0, 10) : null, paid: d.Summons_Executed || null,
+  court: +d.Court_fee || 0, status: d.Case_Status || null } : null;
 export function transform(raw, cfg) {
   const aliases = cfg.defendant_aliases || {};
   const share = cfg.fee_share ?? 1;
@@ -72,7 +78,8 @@ export function transform(raw, cfg) {
     if ((isPaid && String(d.Summons_Executed || d.Stage_Modified_Time || '') >= '2025-01') || ['Settled Unpaid', 'Settlement Agreement'].includes(stage))
       firmCases.push({ id: d.id, name: d.Deal_Name || '(no name)', def, stage, paid: isPaid ? String(d.Summons_Executed || d.Stage_Modified_Time || '').slice(0, 10) : null,
         pm: isPaid ? month(d.Summons_Executed || d.Stage_Modified_Time) : null, settled: settledAt ? String(settledAt).slice(0, 10) : null, sm: month(settledAt),
-        fees: fees * share, settle, payout, dup: !!dupOf, noDate: isPaid && !d.Summons_Executed });
+        fees: fees * share, settle, payout, dup: !!dupOf, noDate: isPaid && !d.Summons_Executed,
+        client: d.Contact_Name || null, cy: String(d.Created_Time || '').slice(0, 4), imported: String(d.Created_Time || '') < '2024-11', z: zd(d) });
     if (dupOf) { dq.dup_paid = (dq.dup_paid || 0) + 1; continue; }
     if (isPaid) {
       dq.paid++;
@@ -139,7 +146,7 @@ export function transform(raw, cfg) {
     caseList.push({ m: r.m, name: r.name, member: team[r.member] || r.member, src: sheetSrc(r.source), filing: r.filingStatus, filingText: r.filing,
       red: !!r.red, zoho: d?.Deal_Name || null, how: hit.how, stage, def1: d?.Account_Name || null, s: s4, settle: s4.reduce((a, b) => a + b, 0),
       fees: d ? n(d.Gaurds_Law_Attorney_s_Fees) * share : 0, payout: d ? n(d.Client_Payout) : 0, paid: paidDate ? String(paidDate).slice(0, 10) : null,
-      dup: !!dup, defKey: def, id: d?.id || null });
+      dup: !!dup, defKey: def, id: d?.id || null, presuit: !!r.isPresuit, filed: !!r.isFiled, z: zd(d) });
   }
   // Other tracker tabs, aggregated (no names).
   const sh = raw.sheet || {};
@@ -229,12 +236,18 @@ export function transform(raw, cfg) {
     .map((r) => ({ query: r.query, clicks: n(r.clicks), impressions: n(r.impressions), position: n(r.position) }));
   const priorPos = Object.fromEntries((raw.windsor.sc_q_prior || []).map((r) => [r.query, n(r.position)]));
 
+  const yr = String(cfg.sheet?.year || new Date().getUTCFullYear());
+  const leadList = raw.leads.filter((l) => String(l.Created_Time || '').startsWith(yr)).map((l) => {
+    const deal = l.Deal ? dealById.get(l.Deal) : null;
+    return { id: l.id || null, name: l.name || '(no name)', src: src(l.Lead_Source), rawSrc: l.Lead_Source || null, status: l.Converted || deal ? 'Became a case' : (l.Lead_Status && l.Lead_Status !== '-None-' ? l.Lead_Status : 'No status'),
+      date: String(l.Created_Time || '').slice(0, 10), m: month(l.Created_Time), owner: l.owner || null, deal: l.Deal || null, dealStage: deal?.stage || null };
+  });
   const vals = (m) => [...m.values()];
   return {
     generated_at: new Date().toISOString(),
     firm: cfg.firm_name, fee_label: cfg.fee_label, fee_share: share,
     defendants: Object.fromEntries(Object.values(display).map((d) => [d, defType[d] || 'Not set'])),
-    zoho_link: raw.zohoLink || null,
+    zoho_link: raw.zohoLink || null, zoho_base: raw.zohoBase || null, lead_list: leadList,
     year: cfg.sheet?.year || null, cohort: vals(cohort), tracker, cases: caseList, firm_cases: firmCases, hist, unmatched_count: unmatched.length,
     paid: vals(paid), signed: vals(signed), lost: vals(lost), open: vals(open),
     leads: vals(leads), lead_status_90: vals(status90),

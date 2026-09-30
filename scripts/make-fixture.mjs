@@ -21,7 +21,7 @@ for (let i = 0; i < 1650; i++) {
   const signed = imported ? (rnd() < 0.5 ? addDays(created, -Math.floor(rnd() * 200)) : null) : addDays(created, Math.floor(rnd() * 10));
   const stage = pick([['Settled Paid', 538], ['Case Dismissed', 231], ['Demand Sent', 180], ['On Ice', 159], ['Case Packaged - Needs Review', 143], ['Filed', 141], ['Failed Demand', 80], ['Settled Unpaid', 48], ['Drafted Demand', 45], ['Active Negotiations', 40], ['Settlement Agreement', 20], ['Retainer Not Signed', 13]]);
   const d = { id: String(id++), Deal_Name: `Client${i} Sample v. ${name}`, Stage: stage, Account_Name: name, Lead_Source: pick(sources), Case_Type: type,
-    Created_Time: created.toISOString(), Retainer_Signed_Date: signed ? iso(signed) : null, Lead_Intake_Date: null, Stage_Modified_Time: addDays(created, 60 + Math.floor(rnd() * 200)).toISOString() };
+    Created_Time: created.toISOString(), _presuit: rnd() < 0.3 ? iso(addDays(created, 20)) : null, _filed: rnd() < 0.2 ? iso(addDays(created, 60)) : null, Case_Status: rnd() < 0.2 ? 'Waiting on defendant response' : null, Retainer_Signed_Date: signed ? iso(signed) : null, Lead_Intake_Date: null, Stage_Modified_Time: addDays(created, 60 + Math.floor(rnd() * 200)).toISOString() };
   if (['Settled Paid', 'Settled Unpaid', 'Settlement Agreement'].includes(stage)) {
     const f = Math.round(fee * (0.6 + rnd() * 0.8) / 50) * 50, p = Math.round(f * (0.1 + rnd() * 0.3) / 50) * 50;
     d.Settlement_Amount = f + p; d.Gaurds_Law_Attorney_s_Fees = rnd() < 0.96 ? f : null; d.Client_Payout = p;
@@ -37,7 +37,7 @@ const leads = [];
 for (let i = 0; i < 6000; i++) {
   const created = addDays(new Date('2025-01-01'), Math.floor(rnd() * 635));
   const conv = rnd() < 0.08, deal = conv ? deals[Math.floor(rnd() * deals.length)].id : null;
-  leads.push({ Lead_Source: pick([['Meta Ads', 30], ['Credit Saint', 25], ['AR - CROA', 20], ['SEO', 10], ['Bolster CRM', 10], ['TCA', 5]]), Lead_Status: pick(leadStatus), Created_Time: created.toISOString(), Converted: conv, Deal: deal });
+  leads.push({ id: 'L' + i, name: `Lead Person ${i}`, owner: 'Andrew', Lead_Source: pick([['Meta Ads', 30], ['Credit Saint', 25], ['AR - CROA', 20], ['SEO', 10], ['Bolster CRM', 10], ['TCA', 5]]), Lead_Status: pick(leadStatus), Created_Time: created.toISOString(), Converted: conv, Deal: deal });
 }
 const meta = [];
 for (let d = new Date('2024-06-01'); d < new Date(); d = addDays(d, 1)) {
@@ -76,5 +76,5 @@ for (let mi = 0; mi <= nowM; mi++) {
   }
 }
 fs.mkdirSync('sample', { recursive: true });
-fs.writeFileSync('sample/fixture.json', JSON.stringify({ zohoLink: 'https://crm.zoho.com/crm/org000/tab/Potentials/', deals, leads, sheet: { rows: sheetRows, tabs: ['January \'26'], goals: [{ m: '2026-08', goal: 33 }, { m: '2026-09', goal: 40 }], conditional: [{ m: '2026-09', member: 'A' }, { m: '2026-09', member: 'K' }], referred: [{ m: '2026-07', source: 'SEO', member: 'K', paid: true }, { m: '2026-08', source: 'AR Employment', member: 'A', paid: false }], prep: { cases: 7, contract: 4, ledger: 1, retainer: 0, docs: 4, ready: 2 }, arb: { open: 32, closed: 17, order: 30, drafted: 17, issued: 22, notice: 15, received: 11 } }, windsor: { meta, ga4, sc_daily: sc, sc_q_last, sc_q_prior, sc_q_months, sc_pages, errors: [] } }));
+fs.writeFileSync('sample/fixture.json', JSON.stringify({ zohoLink: 'https://crm.zoho.com/crm/org000/tab/Potentials/', zohoBase: 'https://crm.zoho.com/crm/org000/tab/', deals, leads, sheet: { rows: sheetRows, tabs: ['January \'26'], goals: [{ m: '2026-08', goal: 33 }, { m: '2026-09', goal: 40 }], conditional: [{ m: '2026-09', member: 'A' }, { m: '2026-09', member: 'K' }], referred: [{ m: '2026-07', source: 'SEO', member: 'K', paid: true }, { m: '2026-08', source: 'AR Employment', member: 'A', paid: false }], prep: { cases: 7, contract: 4, ledger: 1, retainer: 0, docs: 4, ready: 2 }, arb: { open: 32, closed: 17, order: 30, drafted: 17, issued: 22, notice: 15, received: 11 } }, windsor: { meta, ga4, sc_daily: sc, sc_q_last, sc_q_prior, sc_q_months, sc_pages, errors: [] } }));
 console.log('Wrote sample/fixture.json');
