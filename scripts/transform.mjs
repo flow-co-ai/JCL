@@ -42,7 +42,7 @@ export function transform(raw, cfg) {
   const acc = (map, key, init) => (map.get(key) || map.set(key, init()).get(key));
   const paid = new Map(), signed = new Map(), lost = new Map(), open = new Map(), types = {};
   const dq = { cases: raw.deals.length, paid: 0, paid_no_fee: 0, paid_no_date: 0, reconcile_ok: 0, reconcile_n: 0, import_signed: 0 };
-  const dealById = new Map();
+  const dealById = new Map(), seenPaid = new Map(), firmCases = [];
 
   for (const d of raw.deals) {
     const def = display[defendantKey(d.Account_Name, aliases)];
@@ -63,7 +63,18 @@ export function transform(raw, cfg) {
     const stage = d.Stage || 'Unknown', group = STAGE_GROUP[stage] || 'Other';
     dealById.set(d.id, { stage, group, fees: fees * share, sm });
 
-    if (stage === 'Settled Paid' || d.Summons_Executed) {
+    const isPaid = stage === 'Settled Paid' || !!d.Summons_Executed;
+    // Duplicate Zoho records (same case name entered twice) are counted once.
+    const nameKey = norm(d.Deal_Name || d.id);
+    const dupOf = isPaid && seenPaid.has(nameKey) ? seenPaid.get(nameKey) : null;
+    if (isPaid && !dupOf) seenPaid.set(nameKey, d.Deal_Name);
+    const settledAt = d.Settled_in_Principle || d.Stage_Modified_Time || null;
+    if ((isPaid && String(d.Summons_Executed || d.Stage_Modified_Time || '') >= '2025-01') || ['Settled Unpaid', 'Settlement Agreement'].includes(stage))
+      firmCases.push({ id: d.id, name: d.Deal_Name || '(no name)', def, stage, paid: isPaid ? String(d.Summons_Executed || d.Stage_Modified_Time || '').slice(0, 10) : null,
+        pm: isPaid ? month(d.Summons_Executed || d.Stage_Modified_Time) : null, settled: settledAt ? String(settledAt).slice(0, 10) : null, sm: month(settledAt),
+        fees: fees * share, settle, payout, dup: !!dupOf, noDate: isPaid && !d.Summons_Executed });
+    if (dupOf) { dq.dup_paid = (dq.dup_paid || 0) + 1; continue; }
+    if (isPaid) {
       dq.paid++;
       if (!fees) dq.paid_no_fee++;
       if (!d.Summons_Executed) dq.paid_no_date++;
@@ -224,7 +235,7 @@ export function transform(raw, cfg) {
     firm: cfg.firm_name, fee_label: cfg.fee_label, fee_share: share,
     defendants: Object.fromEntries(Object.values(display).map((d) => [d, defType[d] || 'Not set'])),
     zoho_link: raw.zohoLink || null,
-    year: cfg.sheet?.year || null, cohort: vals(cohort), tracker, cases: caseList, hist, unmatched_count: unmatched.length,
+    year: cfg.sheet?.year || null, cohort: vals(cohort), tracker, cases: caseList, firm_cases: firmCases, hist, unmatched_count: unmatched.length,
     paid: vals(paid), signed: vals(signed), lost: vals(lost), open: vals(open),
     leads: vals(leads), lead_status_90: vals(status90),
     meta_month: vals(metaM), meta_campaigns_90: vals(camp).sort((a, b) => b.spend - a.spend),
